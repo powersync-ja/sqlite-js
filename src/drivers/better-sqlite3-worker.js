@@ -17,7 +17,7 @@ worker_threads.parentPort.addListener("message", (value) => {
       worker_threads.parentPort.postMessage(rs);
     }
   } else if (message == "stream") {
-    const bindArgs = args == undefined ? [] : [args];
+    const bindArgs = args.args == undefined ? [] : [args.args];
     const statement = db.prepare(args.query);
     if (!statement.reader) {
       statement.run(...bindArgs);
