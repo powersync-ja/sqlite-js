@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "better-sqlite3": "^9.5.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.9",
+    "typescript": "^5.4.5"
+  }
+}
