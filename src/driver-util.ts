@@ -3,7 +3,7 @@ import {
   ReservedConnection,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
-} from './driver-api';
+} from "./driver-api.js";
 
 interface QueuedItem {
   reserved: ReservedConnection | null;
@@ -12,7 +12,7 @@ interface QueuedItem {
 }
 
 export class SingleConnectionPool implements SqliteDriverConnectionPool {
-  private queue: QueuedItem[];
+  private queue: QueuedItem[] = [];
   private inUse: ReservedConnection | null = null;
 
   constructor(private connection: SqliteDriverConnection) {}
@@ -21,7 +21,7 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
     options?: ReserveConnectionOptions
   ): Promise<ReservedConnection> {
     if (options?.signal?.aborted) {
-      throw new Error('Aborted');
+      throw new Error("Aborted");
     }
     const reserved: ReservedConnection = {
       connection: this.connection,
@@ -45,10 +45,10 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
         };
         this.queue.push(item);
         options?.signal?.addEventListener(
-          'abort',
+          "abort",
           () => {
             item.reserved = null;
-            item.reject(new Error('Aborted'));
+            item.reject(new Error("Aborted"));
           },
           { once: true }
         );

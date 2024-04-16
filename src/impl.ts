@@ -2,6 +2,7 @@ import {
   BatchedUpdateEvent,
   ExecuteOptions,
   PreparedQuery,
+  QueryInterface,
   QueryOptions,
   ReserveConnectionOptions,
   ResultSet,
@@ -13,15 +14,56 @@ import {
   TablesChangedEvent,
   TransactionCloseEvent,
   TransactionOptions,
-} from './api';
-import { SqliteArguments, SqliteValue } from './common';
+} from "./api.js";
+import { SqliteArguments, SqliteValue } from "./common.js";
 import {
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
-} from './driver-api';
+} from "./driver-api.js";
 
-export class ConnectionPoolImpl implements SqliteConnectionPool {
+export class ConnectionPoolImpl
+  implements SqliteConnectionPool, QueryInterface
+{
   constructor(private driver: SqliteDriverConnectionPool) {}
+  prepare<T>(query: string): PreparedQuery<T> {
+    throw new Error("Method not implemented.");
+  }
+
+  execute<T>(
+    query: string | PreparedQuery<T>,
+    args?: SqliteArguments | undefined,
+    options?: (ExecuteOptions & ReserveConnectionOptions) | undefined
+  ): Promise<ResultSet<T>> {
+    return this.reserveConnection((con) => {
+      return con.execute(query, args, options);
+    });
+  }
+
+  async *executeStreamed<T>(
+    query: string | PreparedQuery<T>,
+    args?: SqliteArguments | undefined,
+    options?: (StreamedExecuteOptions & ReserveConnectionOptions) | undefined
+  ): AsyncGenerator<ResultSet<T>, any, unknown> {
+    const con = await this.driver.reserveConnection(options ?? {});
+    try {
+      const c2 = new ConnectionImpl(con.connection);
+      for await (let chunk of c2.executeStreamed(query, args, options)) {
+        yield chunk;
+      }
+    } finally {
+      con.release();
+    }
+  }
+
+  select<T>(
+    query: string | PreparedQuery<T>,
+    args?: SqliteArguments | undefined,
+    options?: (QueryOptions & ReserveConnectionOptions) | undefined
+  ): Promise<T[]> {
+    return this.reserveConnection((con) => {
+      return con.select(query, args, options);
+    });
+  }
 
   async reserveConnection<T>(
     callback: (connection: SqliteConnection) => Promise<T>,
@@ -43,16 +85,17 @@ export class ConnectionImpl implements SqliteConnection {
     callback: (tx: SqliteTransaction) => Promise<T>,
     options: TransactionOptions
   ): Promise<T> {
-    await this.driver.prepare('BEGIN').execute();
+    await this.driver.prepare("BEGIN").execute();
     try {
       const tx = new TransactionImpl(this);
-      await callback(tx);
+      const result = await callback(tx);
 
-      await this.driver.prepare('COMMIT').execute();
+      await this.driver.prepare("COMMIT").execute();
+      return result;
     } catch (e) {
-      await this.driver.prepare('ROLLBACK').execute();
+      await this.driver.prepare("ROLLBACK").execute();
+      throw e;
     }
-    throw new Error('Method not implemented.');
   }
 
   onUpdate(
@@ -61,27 +104,27 @@ export class ConnectionImpl implements SqliteConnection {
       | { tables?: string[] | undefined; batchLimit?: number | undefined }
       | undefined
   ): () => void {
-    throw new Error('Method not implemented.');
+    throw new Error("Method not implemented.");
   }
   onTransactionClose(
     listener: (event: TransactionCloseEvent) => void
   ): () => void {
-    throw new Error('Method not implemented.');
+    throw new Error("Method not implemented.");
   }
   onTablesChanged(listener: (event: TablesChangedEvent) => void): () => void {
-    throw new Error('Method not implemented.');
+    throw new Error("Method not implemented.");
   }
   close(): Promise<void> {
-    throw new Error('Method not implemented.');
+    throw new Error("Method not implemented.");
   }
   prepare<T>(query: string): PreparedQuery<T> {
-    throw new Error('Method not implemented.');
+    throw new Error("Method not implemented.");
   }
   query<T>(
     query: string | PreparedQuery<T>,
     args: SqliteArguments
   ): SqliteQuery<T> {
-    throw new Error('Method not implemented.');
+    throw new Error("Method not implemented.");
   }
   async execute<T>(
     query: string | PreparedQuery<T>,
@@ -96,7 +139,7 @@ export class ConnectionImpl implements SqliteConnection {
       if (result == null) {
         result = new ResultSetImpl(rs.columns, [...rs.rows]);
       } else {
-        result.rows.push(...rs.rows);
+        result.raw_rows.push(...rs.rows);
       }
     }
     return result!;
@@ -120,7 +163,7 @@ export class ConnectionImpl implements SqliteConnection {
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
   ): Promise<T[]> {
     const rs = await this.execute(query, args, options);
-    return rs.rowObjects;
+    return rs.rows;
   }
 }
 
@@ -128,11 +171,11 @@ export class TransactionImpl implements SqliteTransaction {
   constructor(private con: ConnectionImpl) {}
 
   getAutoCommit(): Promise<boolean> {
-    throw new Error('Method not implemented.');
+    throw new Error("Method not implemented.");
   }
 
   async rollback(): Promise<void> {
-    await this.select('ROLLBACK');
+    await this.select("ROLLBACK");
   }
 
   prepare<T>(query: string): PreparedQuery<T> {
@@ -173,17 +216,17 @@ export class TransactionImpl implements SqliteTransaction {
 
 class ResultSetImpl<T> implements ResultSet<T> {
   columns: (keyof T)[];
-  rows: SqliteValue[][];
+  raw_rows: SqliteValue[][];
   private _rowObjects: T[] | undefined;
 
   constructor(columns: string[], rows?: SqliteValue[][]) {
     this.columns = columns as any[] as (keyof T)[];
-    this.rows = rows ?? [];
+    this.raw_rows = rows ?? [];
   }
 
-  get rowObjects() {
+  get rows() {
     if (this._rowObjects == null) {
-      this._rowObjects = this.rows.map((row) => {
+      this._rowObjects = this.raw_rows.map((row) => {
         return Object.fromEntries(
           this.columns.map((column, i) => {
             return [column, row[i]];

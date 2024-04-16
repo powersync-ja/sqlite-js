@@ -1,4 +1,4 @@
-import { SqliteArguments, SqliteValue } from './common';
+import { SqliteArguments, SqliteValue } from "./common.js";
 
 export type SqliteDatabase = SqliteConnectionPool & SqliteConnection;
 
@@ -29,26 +29,18 @@ export interface QueryInterface {
   prepare<T>(query: string): PreparedQuery<T>;
 
   /**
-   * Create a query to execute directly on the connection (without a transaction).
-   */
-  query<T>(
-    query: string | PreparedQuery<T>,
-    args: SqliteArguments
-  ): SqliteQuery<T>;
-
-  /**
    * Convenience method, same as query(query, args).execute(options).
    *
    * When called on a connection pool, uses readonly: true by default.
    */
   execute<T>(
     query: string | PreparedQuery<T>,
-    args: SqliteArguments | undefined,
+    args?: SqliteArguments | undefined,
     options?: ExecuteOptions & ReserveConnectionOptions
   ): Promise<ResultSet<T>>;
 
   /**
-   * Convenience method, same as query(query, args).execute(options).
+   * Convenience method, same as query(query, args).executeStreamed(options).
    */
   executeStreamed<T>(
     query: string | PreparedQuery<T>,
@@ -74,7 +66,7 @@ export interface SqliteConnection extends QueryInterface {
    */
   transaction<T>(
     callback: (tx: SqliteTransaction) => Promise<T>,
-    options: TransactionOptions
+    options?: TransactionOptions
   ): Promise<T>;
 
   /**
@@ -121,7 +113,7 @@ export interface BatchedUpdateEvent {
 
 export interface UpdateEvent {
   table: string;
-  type: 'insert' | 'update' | 'delete';
+  type: "insert" | "update" | "delete";
   rowId: bigint;
 }
 
@@ -158,7 +150,7 @@ export interface TransactionOptions {
    *
    * Read transactions should use "deferred".
    */
-  type?: 'exclusive' | 'immediate' | 'deferred';
+  type?: "exclusive" | "immediate" | "deferred";
 }
 
 export interface ResultSet<T = any> {
@@ -166,12 +158,12 @@ export interface ResultSet<T = any> {
   changes?: number;
 
   columns: (keyof T)[];
-  rows: SqliteValue[][];
+  raw_rows: SqliteValue[][];
 
   /**
    * Convenience method to combine columns and rows into objects.
    */
-  rowObjects: T[];
+  rows: T[];
 }
 
 export interface SqliteQuery<T> {

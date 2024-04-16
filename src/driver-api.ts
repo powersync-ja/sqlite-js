@@ -1,4 +1,4 @@
-import { SqliteArguments, SqliteValue } from './common';
+import { SqliteArguments, SqliteValue } from "./common.js";
 
 export interface SqliteDriverConnection {
   prepare(query: string): SqliteDriverStatement;
@@ -44,4 +44,5 @@ export interface ResultSet {
 
 export interface ExecuteOptions {
   chunkSize?: number;
+  bigint?: boolean;
 }

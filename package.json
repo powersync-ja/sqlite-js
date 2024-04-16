@@ -1,9 +1,15 @@
 {
   "dependencies": {
-    "better-sqlite3": "^9.5.0"
+    "better-sqlite3": "^9.5.0",
+    "event-iterator": "^2.0.0"
   },
+  "type": "module",
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.9",
-    "typescript": "^5.4.5"
+    "@types/mocha": "^10.0.6",
+    "chai": "^5.1.0",
+    "mocha": "^10.4.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.5.0"
   }
 }
