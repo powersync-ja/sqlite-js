@@ -3,6 +3,7 @@ import {
   ReservedConnection,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
+  UpdateListener,
 } from "./driver-api.js";
 
 interface QueuedItem {
@@ -77,6 +78,15 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
       item.resolve(item.reserved);
       break;
     }
+  }
+
+  onUpdate(
+    listener: UpdateListener,
+    options?:
+      | { tables?: string[] | undefined; batchLimit?: number | undefined }
+      | undefined
+  ): () => void {
+    return this.connection.onUpdate(listener, options);
   }
 }
 
@@ -161,6 +171,16 @@ class MultiConnectionPool implements SqliteDriverConnectionPool {
       await con.close();
     }
   }
+
+  onUpdate(
+    listener: UpdateListener,
+    options?:
+      | { tables?: string[] | undefined; batchLimit?: number | undefined }
+      | undefined
+  ): () => void {
+    // No-op
+    return () => {};
+  }
 }
 
 export class ReadWriteConnectionPool implements SqliteDriverConnectionPool {
@@ -192,5 +212,14 @@ export class ReadWriteConnectionPool implements SqliteDriverConnectionPool {
   async close() {
     await this.readPool.close();
     await this.writePool?.close();
+  }
+
+  onUpdate(
+    listener: UpdateListener,
+    options?:
+      | { tables?: string[] | undefined; batchLimit?: number | undefined }
+      | undefined
+  ): () => void {
+    return this.writePool!.onUpdate(listener, options);
   }
 }

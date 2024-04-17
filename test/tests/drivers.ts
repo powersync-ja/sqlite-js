@@ -165,5 +165,28 @@ export function describeDriverTests(
         release();
       }
     });
+
+    test.skip("onUpdate", async () => {
+      // Skipped: Not properly implemented yet.
+
+      const driver = await open();
+      const { connection, release } = await driver.reserveConnection();
+      try {
+        await connection.run(
+          "create table test_data(id integer primary key, data text)"
+        );
+        // TODO: test the results
+        connection.onUpdate(({ events }) => {
+          console.log("update", events);
+        });
+
+        await connection.run(
+          "insert into test_data(data) values(123) returning id"
+        );
+        await connection.run("update test_data set data = data || 'test'");
+      } finally {
+        release();
+      }
+    });
   });
 }

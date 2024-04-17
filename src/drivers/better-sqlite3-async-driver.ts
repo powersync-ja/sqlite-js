@@ -5,6 +5,7 @@ import {
   RunResults,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
+  UpdateListener,
 } from "../driver-api.js";
 
 import { EventIterator } from "event-iterator";
@@ -103,5 +104,14 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
       }
     }
     return results!;
+  }
+
+  onUpdate(
+    listener: UpdateListener,
+    options?:
+      | { tables?: string[] | undefined; batchLimit?: number | undefined }
+      | undefined
+  ): () => void {
+    throw new Error("Not implemented");
   }
 }

@@ -6,6 +6,7 @@ import {
   RunResults,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
+  UpdateListener,
 } from "../driver-api.js";
 
 import { ReadWriteConnectionPool } from "../driver-util.js";
@@ -92,6 +93,15 @@ export class Sqlite3Connection implements SqliteDriverConnection {
 
   async close() {
     this.con.close();
+  }
+
+  onUpdate(
+    listener: UpdateListener,
+    options?:
+      | { tables?: string[] | undefined; batchLimit?: number | undefined }
+      | undefined
+  ): () => void {
+    throw new Error("Not implemented");
   }
 }
 

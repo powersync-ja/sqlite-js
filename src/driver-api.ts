@@ -16,6 +16,11 @@ export interface SqliteDriverConnection {
     options?: ExecuteOptions
   ): Promise<ResultSet>;
 
+  onUpdate(
+    listener: UpdateListener,
+    options?: { tables?: string[]; batchLimit?: number }
+  ): () => void;
+
   close(): Promise<void>;
 }
 
@@ -31,6 +36,23 @@ export interface SqliteDriverConnectionPool {
   ): Promise<ReservedConnection>;
 
   close(): Promise<void>;
+
+  onUpdate(
+    listener: UpdateListener,
+    options?: { tables?: string[]; batchLimit?: number }
+  ): () => void;
+}
+
+export type UpdateListener = (event: BatchedUpdateEvent) => void;
+
+export interface BatchedUpdateEvent {
+  events: UpdateEvent[];
+}
+
+export interface UpdateEvent {
+  table: string;
+  type: "insert" | "update" | "delete";
+  rowId: bigint;
 }
 
 export interface ReservedConnection {
