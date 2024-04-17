@@ -32,17 +32,18 @@ export function describeDriverTests(
     });
 
     afterEach(async () => {
-      for (let db of _dbs) {
+      const closeDbs = _dbs;
+      _dbs = [];
+      for (let db of closeDbs) {
         await db.close();
       }
-      _dbs = [];
     });
 
     test("basic select", async () => {
       const driver = await open();
       const { connection, release } = await driver.reserveConnection();
       try {
-        const rs = await connection.prepare("select 1 as one").selectAll();
+        const rs = await connection.selectAll("select 1 as one");
         expect(rs.columns).toEqual(["one"]);
         expect(rs.rows).toEqual([[1]]);
       } finally {
@@ -54,14 +55,13 @@ export function describeDriverTests(
       const driver = await open();
       const { connection, release } = await driver.reserveConnection();
       try {
-        const rs = await connection
-          .prepare("select 9223372036854775807 as bignumber")
-          .selectAll();
+        const rs = await connection.selectAll(
+          "select 9223372036854775807 as bignumber"
+        );
         expect(rs.rows).toEqual([[9223372036854776000]]);
-
-        const rs2 = await connection
-          .prepare("select ? as bignumber")
-          .selectAll([9223372036854775807n]);
+        const rs2 = await connection.selectAll("select ? as bignumber", [
+          9223372036854775807n,
+        ]);
         expect(rs2.rows).toEqual([[9223372036854776000]]);
       } finally {
         release();
@@ -72,15 +72,22 @@ export function describeDriverTests(
       const driver = await open();
       const { connection, release } = await driver.reserveConnection();
       try {
-        const rs = await connection
-          .prepare("select 9223372036854775807 as bignumber")
-          .selectAll(undefined, { bigint: true });
-        expect(rs.columns).toEqual(["bignumber"]);
-        expect(rs.rows).toEqual([[9223372036854775807n]]);
+        const rs1 = await connection.selectAll(
+          "select 9223372036854775807 as bignumber",
+          undefined,
+          { bigint: true }
+        );
+        expect(rs1.columns).toEqual(["bignumber"]);
+        expect(rs1.rows).toEqual([[9223372036854775807n]]);
 
-        const rs2 = await connection
-          .prepare("select ? as bignumber")
-          .selectAll([9223372036854775807n], { bigint: true });
+        const rs2 = await connection.selectAll(
+          "select ? as bignumber",
+          [9223372036854775807n],
+          {
+            bigint: true,
+          }
+        );
+
         expect(rs2.rows).toEqual([[9223372036854775807n]]);
       } finally {
         release();
@@ -91,13 +98,13 @@ export function describeDriverTests(
       const driver = await open();
       const { connection, release } = await driver.reserveConnection();
       try {
-        await connection
-          .prepare("create table test_data(id integer primary key, data text)")
-          .run();
+        await connection.run(
+          "create table test_data(id integer primary key, data text)"
+        );
 
-        const rs = await connection
-          .prepare("insert into test_data(data) values(123) returning id")
-          .selectAll();
+        const rs = await connection.selectAll(
+          "insert into test_data(data) values(123) returning id"
+        );
         expect(rs.columns).toEqual(["id"]);
         expect(rs.rows).toEqual([[1]]);
       } finally {
@@ -109,14 +116,35 @@ export function describeDriverTests(
       const driver = await open();
       const { connection, release } = await driver.reserveConnection();
       try {
-        const r1 = await connection
-          .prepare("create table test_data(id integer primary key, data text)")
-          .runWithResults();
+        const r1 = await connection.runWithResults(
+          "create table test_data(id integer primary key, data text)"
+        );
 
         expect(r1).toEqual({ changes: 0, lastInsertRowId: 0n });
-        const r2 = await connection
-          .prepare("insert into test_data(data) values(123) returning id")
-          .runWithResults();
+        const r2 = await connection.runWithResults(
+          "insert into test_data(data) values(123)"
+        );
+        expect(r2).toEqual({
+          changes: 1,
+          lastInsertRowId: 1n,
+        });
+      } finally {
+        release();
+      }
+    });
+
+    test("runWithResults - returning statement", async () => {
+      const driver = await open();
+      const { connection, release } = await driver.reserveConnection();
+      try {
+        const r1 = await connection.runWithResults(
+          "create table test_data(id integer primary key, data text)"
+        );
+
+        expect(r1).toEqual({ changes: 0, lastInsertRowId: 0n });
+        const r2 = await connection.runWithResults(
+          "insert into test_data(data) values(123) returning id"
+        );
         expect(r2).toEqual({
           changes: 1,
           lastInsertRowId: 1n,
@@ -130,7 +158,7 @@ export function describeDriverTests(
       const driver = await open();
       const { connection, release } = await driver.reserveConnection();
       try {
-        const r1 = await connection.prepare("select 1 as one").runWithResults();
+        const r1 = await connection.runWithResults("select 1 as one");
 
         expect(r1).toEqual({ changes: 0, lastInsertRowId: 0n });
       } finally {

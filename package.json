@@ -4,7 +4,8 @@
   },
   "dependencies": {
     "better-sqlite3": "^9.5.0",
-    "event-iterator": "^2.0.0"
+    "event-iterator": "^2.0.0",
+    "sqlite3": "^5.1.7"
   },
   "type": "module",
   "devDependencies": {

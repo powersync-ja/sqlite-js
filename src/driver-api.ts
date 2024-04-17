@@ -1,7 +1,21 @@
 import { SqliteArguments, SqliteValue } from "./common.js";
 
 export interface SqliteDriverConnection {
-  prepare(query: string): SqliteDriverStatement;
+  run(query: string, args?: SqliteArguments): Promise<void>;
+  runWithResults(query: string, args?: SqliteArguments): Promise<RunResults>;
+
+  selectStreamed(
+    query: string,
+    args?: SqliteArguments,
+    options?: ExecuteOptions
+  ): AsyncIterable<ResultSet>;
+
+  selectAll(
+    query: string,
+    args?: SqliteArguments,
+    options?: ExecuteOptions
+  ): Promise<ResultSet>;
+
   close(): Promise<void>;
 }
 
@@ -27,23 +41,6 @@ export interface ReservedConnection {
 export interface ReserveConnectionOptions {
   readonly?: boolean;
   signal?: AbortSignal;
-}
-
-export interface SqliteDriverStatement {
-  run(args?: SqliteArguments): Promise<void>;
-  runWithResults(args?: SqliteArguments): Promise<RunResults>;
-
-  selectStreamed(
-    args?: SqliteArguments,
-    options?: ExecuteOptions
-  ): AsyncIterable<ResultSet>;
-
-  selectAll(
-    args?: SqliteArguments,
-    options?: ExecuteOptions
-  ): Promise<ResultSet>;
-
-  dispose(): void;
 }
 
 export interface RunResults {

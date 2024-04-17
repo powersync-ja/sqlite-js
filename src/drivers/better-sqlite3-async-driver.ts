@@ -5,10 +5,11 @@ import {
   RunResults,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
-  SqliteDriverStatement,
 } from "../driver-api.js";
 
 import { EventIterator } from "event-iterator";
+import { StreamedExecuteOptions } from "../api.js";
+import { SqliteArguments } from "../common.js";
 import { ReadWriteConnectionPool } from "../driver-util.js";
 
 export function betterSqliteAsyncPool(
@@ -49,56 +50,58 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
     await this.worker.terminate();
   }
 
-  prepare(query: string): SqliteDriverStatement {
-    const worker = this.worker;
-    return {
-      dispose() {},
-      run: async (args) => {
-        worker.postMessage(["run", { query, args }]);
-        return new Promise<void>((resolve, reject) => {
-          worker.once("message", (value) => {
-            resolve();
-          });
-        });
-      },
-      runWithResults: async (args) => {
-        worker.postMessage(["run", { query, args }]);
-        return new Promise<RunResults>((resolve, reject) => {
-          worker.once("message", (value) => {
-            resolve(value);
-          });
-        });
-      },
-      async *selectStreamed(args, options) {
-        worker.postMessage(["stream", { query, args, options }]);
-        const iter = new EventIterator(({ push }) => {
-          worker.addListener("message", push);
-          return () => worker.removeListener("message", push);
-        });
-        let columns: string[] = [];
-        for await (let message of iter) {
-          const [type, args] = message as any;
-          if (type == "columns") {
-            columns = args;
-          } else if (type == "rows") {
-            yield { columns, rows: args };
-          } else if (type == "close") {
-            break;
-          }
-        }
-      },
+  async run(query: string, args: SqliteArguments) {
+    this.worker.postMessage(["run", { query, args }]);
+    return new Promise<void>((resolve, reject) => {
+      this.worker.once("message", (value) => {
+        resolve();
+      });
+    });
+  }
+  async runWithResults(query: string, args: SqliteArguments) {
+    this.worker.postMessage(["run", { query, args }]);
+    return new Promise<RunResults>((resolve, reject) => {
+      this.worker.once("message", (value) => {
+        resolve(value);
+      });
+    });
+  }
+  async *selectStreamed(
+    query: string,
+    args: SqliteArguments,
+    options: StreamedExecuteOptions
+  ) {
+    this.worker.postMessage(["stream", { query, args, options }]);
+    const iter = new EventIterator(({ push }) => {
+      this.worker.addListener("message", push);
+      return () => this.worker.removeListener("message", push);
+    });
+    let columns: string[] = [];
+    for await (let message of iter) {
+      const [type, args] = message as any;
+      if (type == "columns") {
+        columns = args;
+      } else if (type == "rows") {
+        yield { columns, rows: args };
+      } else if (type == "close") {
+        break;
+      }
+    }
+  }
 
-      async selectAll(args, options): Promise<ResultSet> {
-        let results: ResultSet | undefined = undefined;
-        for await (let rs of this.selectStreamed(args, options)) {
-          if (results == null) {
-            results = rs;
-          } else {
-            results!.rows.push(...rs.rows);
-          }
-        }
-        return results!;
-      },
-    };
+  async selectAll(
+    query: string,
+    args: SqliteArguments,
+    options: StreamedExecuteOptions
+  ): Promise<ResultSet> {
+    let results: ResultSet | undefined = undefined;
+    for await (let rs of this.selectStreamed(query, args, options)) {
+      if (results == null) {
+        results = rs;
+      } else {
+        results!.rows.push(...rs.rows);
+      }
+    }
+    return results!;
   }
 }
