@@ -85,15 +85,15 @@ export class ConnectionImpl implements SqliteConnection {
     callback: (tx: SqliteTransaction) => Promise<T>,
     options: TransactionOptions
   ): Promise<T> {
-    await this.driver.prepare("BEGIN").execute();
+    await this.driver.prepare("BEGIN").run();
     try {
       const tx = new TransactionImpl(this);
       const result = await callback(tx);
 
-      await this.driver.prepare("COMMIT").execute();
+      await this.driver.prepare("COMMIT").run();
       return result;
     } catch (e) {
-      await this.driver.prepare("ROLLBACK").execute();
+      await this.driver.prepare("ROLLBACK").run();
       throw e;
     }
   }
@@ -135,7 +135,7 @@ export class ConnectionImpl implements SqliteConnection {
 
     const q = this.driver.prepare(query as string);
 
-    for await (let rs of q.stream(args)) {
+    for await (let rs of q.selectStreamed(args)) {
       if (result == null) {
         result = new ResultSetImpl(rs.columns, [...rs.rows]);
       } else {
@@ -152,7 +152,7 @@ export class ConnectionImpl implements SqliteConnection {
   ): AsyncGenerator<ResultSet<T>, void, unknown> {
     const q = this.driver.prepare(query as string);
 
-    for await (let rs of q.stream(args, options)) {
+    for await (let rs of q.selectStreamed(args, options)) {
       yield new ResultSetImpl(rs.columns, rs.rows);
     }
   }

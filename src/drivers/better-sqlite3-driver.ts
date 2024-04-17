@@ -2,6 +2,7 @@ import { SqliteArguments, SqliteValue } from "../common.js";
 import {
   ExecuteOptions,
   ResultSet,
+  RunResults,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
   SqliteDriverStatement,
@@ -29,7 +30,6 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   con: bsqlite.Database;
 
   constructor(path: string, options?: bsqlite.Options) {
-    console.log("options", options);
     this.con = new Database(path, options);
   }
 
@@ -37,12 +37,37 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     const stmt = this.con.prepare(query);
     return new BetterSqliteStatement(stmt);
   }
+
+  async close() {
+    this.con.close();
+  }
 }
 
 export class BetterSqliteStatement implements SqliteDriverStatement {
   constructor(private statement: bsqlite.Statement) {}
 
-  async *stream(
+  async selectAll(
+    args?: SqliteArguments | undefined,
+    options?: ExecuteOptions | undefined
+  ): Promise<ResultSet> {
+    const bindArgs = args == undefined ? [] : [args];
+    if (!this.statement.reader) {
+      this.statement.run(...bindArgs);
+      return { columns: [], rows: [] };
+    }
+    this.statement.raw();
+    if (options?.bigint) {
+      this.statement.safeIntegers();
+    }
+    const columns = this.statement.columns().map((c) => c.name);
+    const rows = this.statement.all(...bindArgs) as SqliteValue[][];
+    return {
+      columns,
+      rows,
+    };
+  }
+
+  async *selectStreamed(
     args?: SqliteArguments,
     options?: ExecuteOptions
   ): AsyncGenerator<ResultSet, any, undefined> {
@@ -58,7 +83,7 @@ export class BetterSqliteStatement implements SqliteDriverStatement {
     const columns = this.statement.columns().map((c) => c.name);
     let buffer: SqliteValue[][] = [];
     let didYield = false;
-    for (let row of this.statement.all(...bindArgs)) {
+    for (let row of this.statement.iterate(...bindArgs)) {
       buffer.push(row as SqliteValue[]);
       if (buffer.length > (options?.chunkSize ?? 10)) {
         yield {
@@ -77,8 +102,18 @@ export class BetterSqliteStatement implements SqliteDriverStatement {
     }
   }
 
-  async execute(args?: SqliteArguments): Promise<void> {
-    this.statement.run();
+  async run(args?: SqliteArguments): Promise<void> {
+    const bindArgs = args == undefined ? [] : [args];
+    this.statement.run(...bindArgs);
+  }
+
+  async runWithResults(args?: SqliteArguments): Promise<RunResults> {
+    const bindArgs = args == undefined ? [] : [args];
+    const r = this.statement.run(...bindArgs);
+    return {
+      changes: r.changes,
+      lastInsertRowId: BigInt(r.lastInsertRowid),
+    };
   }
 
   dispose(): void {

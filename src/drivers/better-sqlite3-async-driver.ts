@@ -1,6 +1,8 @@
 import type * as bsqlite from "better-sqlite3";
 import * as worker_threads from "worker_threads";
 import {
+  ResultSet,
+  RunResults,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
   SqliteDriverStatement,
@@ -37,19 +39,37 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
     this.worker = worker;
   }
 
+  async close() {
+    this.worker.postMessage(["close"]);
+    await new Promise<void>((resolve, reject) => {
+      this.worker.once("message", (value) => {
+        resolve();
+      });
+    });
+    await this.worker.terminate();
+  }
+
   prepare(query: string): SqliteDriverStatement {
     const worker = this.worker;
     return {
       dispose() {},
-      execute: async (args) => {
-        worker.postMessage(["execute", { query, args }]);
+      run: async (args) => {
+        worker.postMessage(["run", { query, args }]);
         return new Promise<void>((resolve, reject) => {
           worker.once("message", (value) => {
             resolve();
           });
         });
       },
-      async *stream(args, options) {
+      runWithResults: async (args) => {
+        worker.postMessage(["run", { query, args }]);
+        return new Promise<RunResults>((resolve, reject) => {
+          worker.once("message", (value) => {
+            resolve(value);
+          });
+        });
+      },
+      async *selectStreamed(args, options) {
         worker.postMessage(["stream", { query, args, options }]);
         const iter = new EventIterator(({ push }) => {
           worker.addListener("message", push);
@@ -66,6 +86,18 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
             break;
           }
         }
+      },
+
+      async selectAll(args, options): Promise<ResultSet> {
+        let results: ResultSet | undefined = undefined;
+        for await (let rs of this.selectStreamed(args, options)) {
+          if (results == null) {
+            results = rs;
+          } else {
+            results!.rows.push(...rs.rows);
+          }
+        }
+        return results!;
       },
     };
   }

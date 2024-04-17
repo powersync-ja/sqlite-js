@@ -17,6 +17,10 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
 
   constructor(private connection: SqliteDriverConnection) {}
 
+  async close() {
+    await this.connection.close();
+  }
+
   reserveConnection(
     options?: ReserveConnectionOptions
   ): Promise<ReservedConnection> {
@@ -150,6 +154,13 @@ class MultiConnectionPool implements SqliteDriverConnectionPool {
       },
     });
   }
+
+  async close() {
+    // TODO: Wait for statements to finish
+    for (let con of this._allConnections) {
+      await con.close();
+    }
+  }
 }
 
 export class ReadWriteConnectionPool implements SqliteDriverConnectionPool {
@@ -176,5 +187,10 @@ export class ReadWriteConnectionPool implements SqliteDriverConnectionPool {
     } else {
       return this.writePool!.reserveConnection(options);
     }
+  }
+
+  async close() {
+    await this.readPool.close();
+    await this.writePool?.close();
   }
 }

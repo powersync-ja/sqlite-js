@@ -2,6 +2,7 @@ import { SqliteArguments, SqliteValue } from "./common.js";
 
 export interface SqliteDriverConnection {
   prepare(query: string): SqliteDriverStatement;
+  close(): Promise<void>;
 }
 
 export interface SqliteDriverConnectionPool {
@@ -14,6 +15,8 @@ export interface SqliteDriverConnectionPool {
   reserveConnection(
     options?: ReserveConnectionOptions
   ): Promise<ReservedConnection>;
+
+  close(): Promise<void>;
 }
 
 export interface ReservedConnection {
@@ -27,14 +30,25 @@ export interface ReserveConnectionOptions {
 }
 
 export interface SqliteDriverStatement {
-  execute(args?: SqliteArguments): Promise<void>;
+  run(args?: SqliteArguments): Promise<void>;
+  runWithResults(args?: SqliteArguments): Promise<RunResults>;
 
-  stream(
+  selectStreamed(
     args?: SqliteArguments,
     options?: ExecuteOptions
   ): AsyncIterable<ResultSet>;
 
+  selectAll(
+    args?: SqliteArguments,
+    options?: ExecuteOptions
+  ): Promise<ResultSet>;
+
   dispose(): void;
+}
+
+export interface RunResults {
+  changes: number;
+  lastInsertRowId: bigint;
 }
 
 export interface ResultSet {

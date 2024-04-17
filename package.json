@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "test": "vitest"
+  },
   "dependencies": {
     "better-sqlite3": "^9.5.0",
     "event-iterator": "^2.0.0"

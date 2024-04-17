@@ -8,14 +8,20 @@ worker_threads.parentPort.addListener("message", (value) => {
   const [message, args] = value;
   if (message == "open") {
     db = new Database(args.path);
-  } else if (message == "execute") {
-    if (args.args == null) {
-      const rs = db.prepare(args.query).all();
-      worker_threads.parentPort.postMessage(rs);
-    } else {
-      const rs = db.prepare(args.query).all(args.args);
-      worker_threads.parentPort.postMessage(rs);
-    }
+  } else if (message == "close") {
+    db?.close();
+    worker_threads.parentPort.postMessage(["closed"]);
+  } else if (message == "run") {
+    const bindArgs = args.args == undefined ? [] : [args.args];
+    const rs = db.prepare(args.query).run(...bindArgs);
+    worker_threads.parentPort.postMessage({
+      changes: rs.changes,
+      lastInsertRowId: BigInt(rs.lastInsertRowid),
+    });
+  } else if (message == "selectAll") {
+    const bindArgs = args.args == undefined ? [] : [args.args];
+    const rs = db.prepare(args.query).all(...bindArgs);
+    worker_threads.parentPort.postMessage(rs);
   } else if (message == "stream") {
     const bindArgs = args.args == undefined ? [] : [args.args];
     const statement = db.prepare(args.query);
