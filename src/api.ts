@@ -1,4 +1,4 @@
-import { SqliteArguments, SqliteValue } from "./common.js";
+import { SqliteArguments, SqliteValue } from './common.js';
 
 export type SqliteDatabase = SqliteConnectionPool & SqliteConnection;
 
@@ -113,7 +113,7 @@ export interface BatchedUpdateEvent {
 
 export interface UpdateEvent {
   table: string;
-  type: "insert" | "update" | "delete";
+  type: 'insert' | 'update' | 'delete';
   rowId: bigint;
 }
 
@@ -150,7 +150,7 @@ export interface TransactionOptions {
    *
    * Read transactions should use "deferred".
    */
-  type?: "exclusive" | "immediate" | "deferred";
+  type?: 'exclusive' | 'immediate' | 'deferred';
 }
 
 export interface ResultSet<T = any> {

@@ -1,6 +1,6 @@
-import type * as bsqlite from "better-sqlite3";
-import DatabaseConstructor from "better-sqlite3";
-import { SqliteArguments, SqliteValue } from "../common.js";
+import type * as bsqlite from 'better-sqlite3';
+import DatabaseConstructor from 'better-sqlite3';
+import { SqliteArguments, SqliteValue } from '../common.js';
 import {
   CommandResult,
   ExecuteOptions,
@@ -9,10 +9,10 @@ import {
   SqliteCommand,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
-  UpdateListener,
-} from "../driver-api.js";
+  UpdateListener
+} from '../driver-api.js';
 
-import { ReadWriteConnectionPool } from "../driver-util.js";
+import { ReadWriteConnectionPool } from '../driver-util.js';
 
 export function betterSqlitePool(
   path: string,
@@ -22,9 +22,9 @@ export function betterSqlitePool(
     async openConnection(options) {
       return new BetterSqliteConnection(path, {
         ...poolOptions,
-        readonly: (poolOptions?.readonly ?? options?.readonly) || false,
+        readonly: (poolOptions?.readonly ?? options?.readonly) || false
       });
-    },
+    }
   });
 }
 
@@ -43,7 +43,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   }
 
   private async executeCommand(command: SqliteCommand): Promise<CommandResult> {
-    if ("prepare" in command) {
+    if ('prepare' in command) {
       const { id, sql } = command.prepare;
       const statement = this.con.prepare(sql);
       const existing = this.statements.get(0);
@@ -61,12 +61,12 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
       } else {
         return { columns: [] };
       }
-    } else if ("bind" in command) {
+    } else if ('bind' in command) {
       const { id, parameters } = command.bind;
       const statement = this.statements.get(id)!;
       statement.bind(parameters);
       return {};
-    } else if ("step" in command) {
+    } else if ('step' in command) {
       const { id, n, all, bigint } = command.step;
       const statement = this.statements.get(id)!;
       if (!statement.reader) {
@@ -103,24 +103,24 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
 
         return { rows, done: isDone };
       }
-    } else if ("reset" in command) {
+    } else if ('reset' in command) {
       const { id, clear_bindings } = command.reset;
       const statement = this.statements.get(id)!;
       // FIXME
       return {};
-    } else if ("finalize" in command) {
+    } else if ('finalize' in command) {
       const { id } = command.finalize;
       const statement = this.statements.get(id)!;
       this.statements.delete(id);
       return {};
-    } else if ("last_insert_row_id" in command) {
+    } else if ('last_insert_row_id' in command) {
       const row = this.con
-        .prepare("select last_insert_rowid()")
+        .prepare('select last_insert_rowid()')
         .raw()
         .get() as any;
       return { last_insert_row_id: BigInt(row[0]) };
-    } else if ("changes" in command) {
-      const row = this.con.prepare("select changes()").raw().get() as any;
+    } else if ('changes' in command) {
+      const row = this.con.prepare('select changes()').raw().get() as any;
       return { changes: row[0] };
     } else {
       throw new Error(`Unknown command: ${Object.keys(command)[0]}`);
@@ -130,7 +130,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   async execute(commands: SqliteCommand[]): Promise<CommandResult[]> {
     let results: CommandResult[] = [];
     for (let command of commands) {
-      if ("sync" in command) {
+      if ('sync' in command) {
         if (this.inError != null) {
           results.push({ error: this.inError });
         } else {
@@ -174,7 +174,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     const rows = statement.all(...bindArgs) as SqliteValue[][];
     return {
       columns,
-      rows,
+      rows
     };
   }
 
@@ -201,7 +201,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
       if (buffer.length > (options?.chunkSize ?? 10)) {
         yield {
           columns,
-          rows: buffer,
+          rows: buffer
         };
         didYield = true;
         buffer = [];
@@ -210,7 +210,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     if (buffer.length > 0 || !didYield) {
       yield {
         columns,
-        rows: buffer,
+        rows: buffer
       };
     }
   }
@@ -230,7 +230,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     const r = statement.run(...bindArgs);
     return {
       changes: r.changes,
-      lastInsertRowId: BigInt(r.lastInsertRowid),
+      lastInsertRowId: BigInt(r.lastInsertRowid)
     };
   }
 
@@ -256,7 +256,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     // 1. The table needs to exist before registering the listener.
     // 2. Deleting and re-creating the same will dereigster the listener for that table.
 
-    this.con.function("_logger", function (table: any, type: any, rowid: any) {
+    this.con.function('_logger', function (table: any, type: any, rowid: any) {
       listener({ events: [{ table, rowId: rowid, type }] });
     });
     let tables = options?.tables;

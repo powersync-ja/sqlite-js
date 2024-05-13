@@ -1,14 +1,14 @@
-import type * as bsqlite from "better-sqlite3";
-import * as worker_threads from "worker_threads";
+import type * as bsqlite from 'better-sqlite3';
+import * as worker_threads from 'worker_threads';
 import {
   CommandResult,
   SqliteCommand,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
-  UpdateListener,
-} from "../driver-api.js";
+  UpdateListener
+} from '../driver-api.js';
 
-import { ReadWriteConnectionPool } from "../driver-util.js";
+import { ReadWriteConnectionPool } from '../driver-util.js';
 
 export function betterSqliteAsyncPool(
   path: string,
@@ -18,9 +18,9 @@ export function betterSqliteAsyncPool(
     async openConnection(options) {
       return new BetterSqliteAsyncConnection(path, {
         ...poolOptions,
-        readonly: (poolOptions?.readonly ?? options?.readonly) || false,
+        readonly: (poolOptions?.readonly ?? options?.readonly) || false
       });
-    },
+    }
   });
 }
 
@@ -32,14 +32,14 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
 
   constructor(path: string, options?: bsqlite.Options) {
     const worker = new worker_threads.Worker(
-      require.resolve("./better-sqlite3-worker.js")
+      require.resolve('./better-sqlite3-worker.js')
     );
-    this.post("open", { path, options });
-    worker.addListener("error", (err) => {
-      console.error("worker error", err);
+    this.post('open', { path, options });
+    worker.addListener('error', (err) => {
+      console.error('worker error', err);
     });
     this.ready = new Promise<void>((resolve) => {
-      worker.addListener("message", (event) => {
+      worker.addListener('message', (event) => {
         const { id, value } = event;
         if (id == 0) {
           resolve();
@@ -73,12 +73,12 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
   }
 
   async close() {
-    await this.post("close", {});
+    await this.post('close', {});
     await this.worker.terminate();
   }
 
   async execute(commands: SqliteCommand[]): Promise<CommandResult[]> {
-    return await this.post("execute", commands);
+    return await this.post('execute', commands);
   }
 
   onUpdate(
@@ -87,6 +87,6 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
       | { tables?: string[] | undefined; batchLimit?: number | undefined }
       | undefined
   ): () => void {
-    throw new Error("Not implemented");
+    throw new Error('Not implemented');
   }
 }

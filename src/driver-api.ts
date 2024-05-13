@@ -1,4 +1,4 @@
-import { SqliteArguments, SqliteValue } from "./common.js";
+import { SqliteArguments, SqliteValue } from './common.js';
 
 export interface SqlitePrepare {
   prepare: {
@@ -108,13 +108,13 @@ export interface BatchedUpdateEvent {
 
 export interface UpdateEvent {
   table: string;
-  type: "insert" | "update" | "delete";
+  type: 'insert' | 'update' | 'delete';
   rowId: bigint;
 }
 
-export interface ReservedConnection {
-  connection: SqliteDriverConnection;
+export interface ReservedConnection extends SqliteDriverConnection {
   release(): void;
+  [Symbol.dispose](): void;
 }
 
 export interface ReserveConnectionOptions {

@@ -1,16 +1,21 @@
 import {
+  CommandResult,
   ReserveConnectionOptions,
   ReservedConnection,
+  SqliteCommand,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
-  UpdateListener,
-} from "./driver-api.js";
+  UpdateListener
+} from './driver-api.js';
 
 interface QueuedItem {
   reserved: ReservedConnection | null;
   resolve: (reserved: ReservedConnection) => void;
   reject: (err: any) => void;
 }
+
+const dispose: typeof Symbol.dispose =
+  Symbol.dispose ?? Symbol('dispose undefined');
 
 export class SingleConnectionPool implements SqliteDriverConnectionPool {
   private queue: QueuedItem[] = [];
@@ -26,17 +31,17 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
     options?: ReserveConnectionOptions
   ): Promise<ReservedConnection> {
     if (options?.signal?.aborted) {
-      throw new Error("Aborted");
+      throw new Error('Aborted');
     }
-    const reserved: ReservedConnection = {
-      connection: this.connection,
-      release: () => {
+    const reserved: ReservedConnection = new ReservedConnectionImpl(
+      this.connection,
+      () => {
         if (this.inUse === reserved) {
           this.inUse = null;
           Promise.resolve().then(() => this.next());
         }
-      },
-    };
+      }
+    );
 
     if (this.inUse == null) {
       this.inUse = reserved;
@@ -46,14 +51,14 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
         const item: QueuedItem = {
           reserved,
           resolve,
-          reject,
+          reject
         };
         this.queue.push(item);
         options?.signal?.addEventListener(
-          "abort",
+          'abort',
           () => {
             item.reserved = null;
-            item.reject(new Error("Aborted"));
+            item.reject(new Error('Aborted'));
           },
           { once: true }
         );
@@ -101,6 +106,36 @@ interface QueuedPoolItem {
   reject: (err: any) => void;
 }
 
+class ReservedConnectionImpl implements ReservedConnection {
+  [Symbol.dispose]: () => void = undefined as any as () => void;
+
+  constructor(
+    private connection: SqliteDriverConnection,
+    public release: () => void
+  ) {
+    if (typeof Symbol.dispose != 'undefined') {
+      this[Symbol.dispose] = release;
+    }
+  }
+
+  execute(commands: SqliteCommand[]): Promise<CommandResult[]> {
+    return this.connection.execute(commands);
+  }
+
+  onUpdate(
+    listener: UpdateListener,
+    options?:
+      | { tables?: string[] | undefined; batchLimit?: number | undefined }
+      | undefined
+  ): () => void {
+    return this.connection.onUpdate(listener, options);
+  }
+
+  close(): Promise<void> {
+    return this.connection.close();
+  }
+}
+
 class MultiConnectionPool implements SqliteDriverConnectionPool {
   private _allConnections = new Set<SqliteDriverConnection>();
   private _availableReadConnections: SqliteDriverConnection[] = [];
@@ -115,7 +150,7 @@ class MultiConnectionPool implements SqliteDriverConnectionPool {
     const promise = new Promise<ReservedConnection>((resolve, reject) => {
       this._queue.push({
         resolve,
-        reject,
+        reject
       });
     });
 
@@ -156,13 +191,12 @@ class MultiConnectionPool implements SqliteDriverConnectionPool {
       connection = this._availableReadConnections.shift()!;
     }
 
-    item.resolve({
-      connection,
-      release: () => {
+    item.resolve(
+      new ReservedConnectionImpl(connection, () => {
         this._availableReadConnections.push(connection);
         Promise.resolve().then(() => this.next());
-      },
-    });
+      })
+    );
   }
 
   async close() {

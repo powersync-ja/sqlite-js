@@ -1,10 +1,11 @@
 {
   "compilerOptions": {
-    "lib": ["ES2023", "DOM"],
+    "lib": ["ES2022", "esnext.disposable", "DOM"],
     "target": "ES2022",
     "strict": true,
     "module": "NodeNext",
-    "outDir": "lib"
+    "outDir": "lib",
+    "noEmit": true
   },
   "include": ["src"]
 }
