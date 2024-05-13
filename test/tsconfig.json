@@ -4,9 +4,7 @@
     "target": "ES2022",
     "strict": true,
     "module": "NodeNext",
-    "outDir": "lib",
-    "sourceMap": false,
-    "declaration": true
+    "outDir": "lib"
   },
   "include": ["src"]
 }

@@ -1,18 +1,16 @@
 import type * as bsqlite from "better-sqlite3";
+import DatabaseConstructor from "better-sqlite3";
 import { SqliteArguments, SqliteValue } from "../common.js";
 import {
   CommandResult,
   ExecuteOptions,
   ResultSet,
   RunResults,
-  SqliteBatchResult,
   SqliteCommand,
-  SqliteCommandBatch,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
   UpdateListener,
 } from "../driver-api.js";
-const Database = require("better-sqlite3");
 
 import { ReadWriteConnectionPool } from "../driver-util.js";
 
@@ -32,12 +30,12 @@ export function betterSqlitePool(
 
 export class BetterSqliteConnection implements SqliteDriverConnection {
   con: bsqlite.Database;
-  statements = new Map<number, bsqlite.Statement>();
-  iterators = new Map<number, Iterator<unknown>>();
-  inError: any = null;
+  private statements = new Map<number, bsqlite.Statement>();
+  private iterators = new Map<number, Iterator<unknown>>();
+  private inError: any = null;
 
   constructor(path: string, options?: bsqlite.Options) {
-    this.con = new Database(path, options);
+    this.con = new DatabaseConstructor(path, options);
   }
 
   async close() {

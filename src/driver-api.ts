@@ -73,21 +73,6 @@ export interface SqliteBatchResult {
 export interface SqliteDriverConnection {
   execute(commands: SqliteCommand[]): Promise<CommandResult[]>;
 
-  run(query: string, args?: SqliteArguments): Promise<void>;
-  runWithResults(query: string, args?: SqliteArguments): Promise<RunResults>;
-
-  selectStreamed(
-    query: string,
-    args?: SqliteArguments,
-    options?: ExecuteOptions
-  ): AsyncIterable<ResultSet>;
-
-  selectAll(
-    query: string,
-    args?: SqliteArguments,
-    options?: ExecuteOptions
-  ): Promise<ResultSet>;
-
   onUpdate(
     listener: UpdateListener,
     options?: { tables?: string[]; batchLimit?: number }
