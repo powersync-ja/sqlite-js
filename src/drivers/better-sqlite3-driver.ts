@@ -1,9 +1,13 @@
 import type * as bsqlite from "better-sqlite3";
 import { SqliteArguments, SqliteValue } from "../common.js";
 import {
+  CommandResult,
   ExecuteOptions,
   ResultSet,
   RunResults,
+  SqliteBatchResult,
+  SqliteCommand,
+  SqliteCommandBatch,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
   UpdateListener,
@@ -28,6 +32,9 @@ export function betterSqlitePool(
 
 export class BetterSqliteConnection implements SqliteDriverConnection {
   con: bsqlite.Database;
+  statements = new Map<number, bsqlite.Statement>();
+  iterators = new Map<number, Iterator<unknown>>();
+  inError: any = null;
 
   constructor(path: string, options?: bsqlite.Options) {
     this.con = new Database(path, options);
@@ -35,6 +42,119 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
 
   async close() {
     this.con.close();
+  }
+
+  private async executeCommand(command: SqliteCommand): Promise<CommandResult> {
+    if ("prepare" in command) {
+      const { id, sql } = command.prepare;
+      const statement = this.con.prepare(sql);
+      const existing = this.statements.get(0);
+      if (existing != null && id == 0) {
+        // Overwrite
+      } else if (existing != null) {
+        throw new Error(
+          `Replacing statement ${id} without finalizing the previous one`
+        );
+      }
+      this.statements.set(id, statement);
+      if (statement.reader) {
+        const columns = statement.columns().map((c) => c.name);
+        return { columns };
+      } else {
+        return { columns: [] };
+      }
+    } else if ("bind" in command) {
+      const { id, parameters } = command.bind;
+      const statement = this.statements.get(id)!;
+      statement.bind(parameters);
+      return {};
+    } else if ("step" in command) {
+      const { id, n, all, bigint } = command.step;
+      const statement = this.statements.get(id)!;
+      if (!statement.reader) {
+        statement.run();
+        return { rows: [], done: true };
+      }
+
+      statement.raw();
+      if (bigint) {
+        statement.safeIntegers();
+      }
+
+      if (all) {
+        const rows = statement.all() as SqliteValue[][];
+        return { rows, done: true };
+      } else {
+        const num_rows = n ?? 1;
+        let iterator = this.iterators.get(id);
+        if (iterator == null) {
+          iterator = statement.iterate();
+          this.iterators.set(id, iterator);
+        }
+        let rows = [];
+        let isDone = false;
+        for (let i = 0; i < num_rows; i++) {
+          const { value, done } = iterator.next();
+          if (done) {
+            isDone = true;
+            this.iterators.delete(id);
+            break;
+          }
+          rows.push(value);
+        }
+
+        return { rows, done: isDone };
+      }
+    } else if ("reset" in command) {
+      const { id, clear_bindings } = command.reset;
+      const statement = this.statements.get(id)!;
+      // FIXME
+      return {};
+    } else if ("finalize" in command) {
+      const { id } = command.finalize;
+      const statement = this.statements.get(id)!;
+      this.statements.delete(id);
+      return {};
+    } else if ("last_insert_row_id" in command) {
+      const row = this.con
+        .prepare("select last_insert_rowid()")
+        .raw()
+        .get() as any;
+      return { last_insert_row_id: BigInt(row[0]) };
+    } else if ("changes" in command) {
+      const row = this.con.prepare("select changes()").raw().get() as any;
+      return { changes: row[0] };
+    } else {
+      throw new Error(`Unknown command: ${Object.keys(command)[0]}`);
+    }
+  }
+
+  async execute(commands: SqliteCommand[]): Promise<CommandResult[]> {
+    let results: CommandResult[] = [];
+    for (let command of commands) {
+      if ("sync" in command) {
+        if (this.inError != null) {
+          results.push({ error: this.inError });
+        } else {
+          results.push({});
+        }
+        if (this.statements.has(0)) {
+          this.statements.delete(0);
+        }
+        this.inError = null;
+      } else if (this.inError) {
+        results.push({ skip: true });
+      } else {
+        try {
+          const result = await this.executeCommand(command);
+          results.push(result);
+        } catch (e) {
+          this.inError = e;
+          results.push({ error: e });
+        }
+      }
+    }
+    return results;
   }
 
   async selectAll(

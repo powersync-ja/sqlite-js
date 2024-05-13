@@ -1,6 +1,78 @@
 import { SqliteArguments, SqliteValue } from "./common.js";
 
+export interface SqlitePrepare {
+  prepare: {
+    id: number;
+    sql: string;
+  };
+}
+
+export interface SqliteBind {
+  bind: {
+    id: number;
+    parameters: SqliteValue[] | Record<string, SqliteValue>;
+  };
+}
+
+export interface SqliteStep {
+  step: {
+    id: number;
+    n?: number;
+    all?: boolean;
+    bigint?: boolean;
+  };
+}
+
+export interface SqliteReset {
+  reset: {
+    id: number;
+    clear_bindings?: boolean;
+  };
+}
+
+export interface SqliteFinalize {
+  finalize: {
+    id: number;
+  };
+}
+
+export interface SqliteSync {
+  sync: {};
+}
+export interface SqliteChanges {
+  changes: {};
+}
+export interface SqliteTotalChanges {
+  total_changes: {};
+}
+export interface SqliteLastInsertRowId {
+  last_insert_row_id: {};
+}
+
+export type SqliteCommand =
+  | SqlitePrepare
+  | SqliteBind
+  | SqliteStep
+  | SqliteReset
+  | SqliteFinalize
+  | SqliteSync
+  | SqliteChanges
+  | SqliteTotalChanges
+  | SqliteLastInsertRowId;
+
+export interface SqliteCommandBatch {
+  commands: SqliteCommand[];
+}
+
+export type CommandResult = {};
+
+export interface SqliteBatchResult {
+  results: CommandResult[];
+}
+
 export interface SqliteDriverConnection {
+  execute(commands: SqliteCommand[]): Promise<CommandResult[]>;
+
   run(query: string, args?: SqliteArguments): Promise<void>;
   runWithResults(query: string, args?: SqliteArguments): Promise<RunResults>;
 
