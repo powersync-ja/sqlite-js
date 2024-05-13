@@ -13,6 +13,15 @@ export interface SqliteConnectionPool {
     callback: (connection: SqliteConnection) => Promise<T>,
     options?: ReserveConnectionOptions
   ): Promise<T>;
+
+  /**
+   * Reserve a connection until released.
+   *
+   * @param options
+   */
+  reserveConnection(
+    options?: ReserveConnectionOptions
+  ): Promise<SqliteConnection>;
 }
 
 export interface ReserveConnectionOptions {
@@ -105,6 +114,8 @@ export interface SqliteConnection extends QueryInterface {
   onTablesChanged(listener: TablesChangedListener): () => void;
 
   close(): Promise<void>;
+
+  release(): Promise<void>;
 }
 
 export interface BatchedUpdateEvent {
