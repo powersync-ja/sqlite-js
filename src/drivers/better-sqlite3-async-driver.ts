@@ -29,6 +29,7 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
   private callbacks = new Map<number, (value: any) => void>();
   private nextCallbackId = 1;
   private ready: Promise<void>;
+  private closing = false;
 
   constructor(path: string, options?: bsqlite.Options) {
     const worker = new worker_threads.Worker(
@@ -73,6 +74,10 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
   }
 
   async close() {
+    if (this.closing) {
+      return;
+    }
+    this.closing = true;
     await this.post('close', {});
     await this.worker.terminate();
   }

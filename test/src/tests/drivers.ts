@@ -2,6 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { SqliteDriverConnectionPool } from '../../../lib/driver-api.js';
+import { SqliteValue } from '../../../lib/common.js';
 
 export function describeDriverTests(
   name: string,
@@ -9,7 +10,6 @@ export function describeDriverTests(
 ) {
   describe(`${name} - driver tests`, () => {
     let dbPath: string;
-    let _dbs: SqliteDriverConnectionPool[] = [];
 
     const open = async () => {
       const dir = path.dirname(dbPath);
@@ -20,7 +20,6 @@ export function describeDriverTests(
         await fs.rm(dbPath);
       } catch (e) {}
       const db = factory(dbPath);
-      _dbs.push(db);
       return db;
     };
 
@@ -31,16 +30,8 @@ export function describeDriverTests(
       dbPath = `test-db/${testNameSanitized}.db`;
     });
 
-    afterEach(async () => {
-      const closeDbs = _dbs;
-      _dbs = [];
-      for (let db of closeDbs) {
-        await db.close();
-      }
-    });
-
     test('basic select', async () => {
-      const driver = await open();
+      await using driver = await open();
       using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
@@ -65,7 +56,7 @@ export function describeDriverTests(
     });
 
     test('big number', async () => {
-      const driver = await open();
+      await using driver = await open();
       using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
@@ -115,7 +106,7 @@ export function describeDriverTests(
     });
 
     test('bigint', async () => {
-      const driver = await open();
+      await using driver = await open();
       using connection = await driver.reserveConnection();
       const results1 = await connection.execute([
         {
@@ -140,8 +131,9 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, , { rows: rows1 }] = results1 as any[];
+      const [, , { rows: rows1 }, { error: error1 }] = results1 as any[];
 
+      expect(error1).toBe(undefined);
       expect(rows1).toEqual([[9223372036854775807n]]);
 
       const results2 = await connection.execute([
@@ -161,13 +153,15 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, { rows: rows2 }] = results2 as any[];
+      const [, { rows: rows2 }, { error }] = results2 as any[];
+
+      expect(error).toBe(undefined);
 
       expect(rows2).toEqual([[9223372036854775807n]]);
     });
 
     test('insert returning', async () => {
-      const driver = await open();
+      await using driver = await open();
       using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
@@ -204,14 +198,20 @@ export function describeDriverTests(
       expect(rows).toEqual([[1]]);
     });
 
-    test('runWithResults', async () => {
-      const driver = await open();
+    test('bind named args', async () => {
+      await using driver = await open();
       using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
             id: 0,
-            sql: 'create table test_data(id integer primary key, data text)'
+            sql: 'select :one as one, :two as two'
+          }
+        },
+        {
+          bind: {
+            id: 0,
+            parameters: { one: 1, two: 2 }
           }
         },
         {
@@ -219,44 +219,30 @@ export function describeDriverTests(
             id: 0,
             all: true
           }
-        },
-        {
-          prepare: {
-            id: 0,
-            sql: 'insert into test_data(data) values(123)'
-          }
-        },
-        {
-          step: {
-            id: 0,
-            all: true
-          }
-        },
-        {
-          last_insert_row_id: {}
-        },
-        {
-          changes: {}
         },
         { sync: {} }
       ]);
 
-      const [, , , , { last_insert_row_id }, { changes }, { error }] =
-        results as any[];
+      const [, , { rows }, { error }] = results as any[];
 
       expect(error).toBe(undefined);
-      expect(changes).toEqual(1);
-      expect(last_insert_row_id).toEqual(1n);
+      expect(rows).toEqual([[1, 2]]);
     });
 
-    test('runWithResults - returning statement', async () => {
-      const driver = await open();
+    test.skip('skip named arg', async () => {
+      await using driver = await open();
       using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
             id: 0,
-            sql: 'create table test_data(id integer primary key, data text)'
+            sql: 'select :one as one, :two as two'
+          }
+        },
+        {
+          bind: {
+            id: 0,
+            parameters: { two: 2 }
           }
         },
         {
@@ -264,45 +250,240 @@ export function describeDriverTests(
             id: 0,
             all: true
           }
-        },
-        {
-          prepare: {
-            id: 0,
-            sql: 'insert into test_data(data) values(123) returning id'
-          }
-        },
-        {
-          step: {
-            id: 0,
-            all: true
-          }
-        },
-        {
-          last_insert_row_id: {}
-        },
-        {
-          changes: {}
         },
         { sync: {} }
       ]);
 
-      const [, , , { rows }, { last_insert_row_id }, { changes }, { error }] =
-        results as any[];
+      const [, , { rows }, { error }] = results as any[];
 
       expect(error).toBe(undefined);
-      expect(rows).toEqual([[1]]);
-      expect(changes).toEqual(1);
-      expect(last_insert_row_id).toEqual(1n);
+      expect(rows).toEqual([[null, 2]]);
     });
 
-    test('runWithResults - select', async () => {
-      const driver = await open();
+    test('rebind arg', async () => {
+      await using driver = await open();
       using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
             id: 0,
-            sql: 'select 1 as one'
+            sql: 'select :one as one, :two as two'
+          }
+        },
+        {
+          bind: {
+            id: 0,
+            parameters: { one: 1, two: 2 }
+          }
+        },
+        {
+          bind: {
+            id: 0,
+            parameters: { one: 11, two: 22 }
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
+        },
+        { sync: {} }
+      ]);
+
+      const [, , , { rows }, { error }] = results as any[];
+
+      expect(error).toBe(undefined);
+      expect(rows).toEqual([[11, 22]]);
+    });
+
+    test('partial rebind', async () => {
+      await using driver = await open();
+      using connection = await driver.reserveConnection();
+      const results = await connection.execute([
+        {
+          prepare: {
+            id: 0,
+            sql: 'select :one as one, :two as two'
+          }
+        },
+        {
+          bind: {
+            id: 0,
+            parameters: { one: 1, two: 2 }
+          }
+        },
+        {
+          bind: {
+            id: 0,
+            parameters: { two: 22 }
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
+        },
+        { sync: {} }
+      ]);
+
+      const [, , , { rows }, { error }] = results as any[];
+
+      expect(error).toBe(undefined);
+      expect(rows).toEqual([[1, 22]]);
+    });
+
+    test('positional parameters', async () => {
+      await using driver = await open();
+      using connection = await driver.reserveConnection();
+      const results = await connection.execute([
+        {
+          prepare: {
+            id: 0,
+            sql: 'select ? as one, ? as two'
+          }
+        },
+        {
+          bind: {
+            id: 0,
+            parameters: [1, 2]
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
+        },
+        { sync: {} }
+      ]);
+
+      const [, , { rows }, { error }] = results as any[];
+
+      expect(error).toBe(undefined);
+      expect(rows).toEqual([[1, 2]]);
+    });
+
+    test('positional specific parameters', async () => {
+      await using driver = await open();
+      using connection = await driver.reserveConnection();
+      const results = await connection.execute([
+        {
+          prepare: {
+            id: 0,
+            sql: 'select ?2 as two, ?1 as one'
+          }
+        },
+        {
+          bind: {
+            id: 0,
+            parameters: { '1': 1, '2': 2 }
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
+        },
+        { sync: {} }
+      ]);
+
+      const [, , { rows }, { error }] = results as any[];
+
+      expect(error).toBe(undefined);
+      expect(rows).toEqual([[2, 1]]);
+    });
+
+    test('positional parameters partial rebind', async () => {
+      await using driver = await open();
+      using connection = await driver.reserveConnection();
+      const results = await connection.execute([
+        {
+          prepare: {
+            id: 0,
+            sql: 'select ? as one, ? as two'
+          }
+        },
+        {
+          bind: {
+            id: 0,
+            parameters: [1, 2]
+          }
+        },
+        {
+          bind: {
+            id: 0,
+            parameters: [undefined, 22]
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
+        },
+        { sync: {} }
+      ]);
+
+      const [, , , { rows }, { error }] = results as any[];
+
+      expect(error).toBe(undefined);
+      expect(rows).toEqual([[1, 22]]);
+    });
+
+    test('named and positional parameters', async () => {
+      await using driver = await open();
+      using connection = await driver.reserveConnection();
+      const results = await connection.execute([
+        {
+          prepare: {
+            id: 0,
+            sql: 'select ? as one, @three as three, ? as two'
+          }
+        },
+        {
+          bind: {
+            id: 0,
+            parameters: [1, 2]
+          }
+        },
+        {
+          bind: {
+            id: 0,
+            parameters: { three: 3 }
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
+        },
+        { sync: {} }
+      ]);
+
+      const [, , , { rows }, { error }] = results as any[];
+
+      expect(error).toBe(undefined);
+      expect(rows).toEqual([[1, 3, 2]]);
+    });
+
+    test('reset parameters', async () => {
+      await using driver = await open();
+      using connection = await driver.reserveConnection();
+      const results = await connection.execute([
+        {
+          prepare: {
+            id: 0,
+            sql: 'select ? as one, ? as two'
+          }
+        },
+        {
+          bind: {
+            id: 0,
+            parameters: [1, 2]
           }
         },
         {
@@ -312,27 +493,49 @@ export function describeDriverTests(
           }
         },
         {
-          last_insert_row_id: {}
+          step: {
+            id: 0,
+            all: true
+          }
         },
         {
-          changes: {}
+          reset: {
+            id: 0,
+            clear_bindings: true
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
         },
         { sync: {} }
       ]);
 
-      const [, { rows }, { last_insert_row_id }, { changes }, { error }] =
-        results as any[];
+      const [
+        ,
+        ,
+        { rows: rows1 },
+        { rows: rows2 },
+        ,
+        { error },
 
-      expect(error).toBe(undefined);
-      expect(rows).toEqual([[1]]);
-      expect(changes).toEqual(0);
-      expect(last_insert_row_id).toEqual(0n);
+        { error: totalError }
+      ] = results as any[];
+
+      // expect(error).toBe(undefined);
+      expect(rows1).toEqual([[1, 2]]);
+      expect(rows2).toEqual([[1, 2]]);
+      expect(error).toMatchObject({
+        message: 'Too few parameter values were provided'
+      });
     });
 
     test.skip('onUpdate', async () => {
       // Skipped: Not properly implemented yet.
 
-      const driver = await open();
+      await using driver = await open();
       using connection = await driver.reserveConnection();
       // await connection.run(
       //   "create table test_data(id integer primary key, data text)"

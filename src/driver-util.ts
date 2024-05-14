@@ -21,7 +21,13 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
   private queue: QueuedItem[] = [];
   private inUse: ReservedConnection | null = null;
 
-  constructor(private connection: SqliteDriverConnection) {}
+  [Symbol.asyncDispose]: () => Promise<void> = undefined as any;
+
+  constructor(private connection: SqliteDriverConnection) {
+    if (typeof Symbol.asyncDispose != 'undefined') {
+      this[Symbol.asyncDispose] = () => this.close();
+    }
+  }
 
   async close() {
     await this.connection.close();
@@ -142,7 +148,13 @@ class MultiConnectionPool implements SqliteDriverConnectionPool {
   private _queue: QueuedPoolItem[] = [];
   private _maxConnections: number = 5;
 
-  constructor(private factory: DriverFactory) {}
+  [Symbol.asyncDispose]: () => Promise<void> = undefined as any;
+
+  constructor(private factory: DriverFactory) {
+    if (typeof Symbol.asyncDispose != 'undefined') {
+      this[Symbol.asyncDispose] = () => this.close();
+    }
+  }
 
   reserveConnection(
     options?: ReserveConnectionOptions | undefined
@@ -222,6 +234,7 @@ export class ReadWriteConnectionPool implements SqliteDriverConnectionPool {
   private readPool: SqliteDriverConnectionPool;
 
   private initPromise: Promise<void>;
+  [Symbol.asyncDispose]: () => Promise<void> = undefined as any;
 
   constructor(private factory: DriverFactory) {
     this.readPool = new MultiConnectionPool(factory);
@@ -229,6 +242,10 @@ export class ReadWriteConnectionPool implements SqliteDriverConnectionPool {
     this.initPromise = factory.openConnection().then((con) => {
       this.writePool = new SingleConnectionPool(con);
     });
+
+    if (typeof Symbol.asyncDispose != 'undefined') {
+      this[Symbol.asyncDispose] = () => this.close();
+    }
   }
 
   async reserveConnection(

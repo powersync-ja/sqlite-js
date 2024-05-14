@@ -10,7 +10,7 @@ export interface SqlitePrepare {
 export interface SqliteBind {
   bind: {
     id: number;
-    parameters: SqliteValue[] | Record<string, SqliteValue>;
+    parameters: (SqliteValue | undefined)[] | Record<string, SqliteValue>;
   };
 }
 
@@ -93,6 +93,8 @@ export interface SqliteDriverConnectionPool {
   ): Promise<ReservedConnection>;
 
   close(): Promise<void>;
+
+  [Symbol.asyncDispose](): Promise<void>;
 
   onUpdate(
     listener: UpdateListener,

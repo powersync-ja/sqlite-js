@@ -1,7 +1,8 @@
 {
   "scripts": {
     "test": "vitest",
-    "format": "prettier . --write"
+    "format": "prettier . --write",
+    "build": "tsc -b"
   },
   "dependencies": {
     "better-sqlite3": "^9.5.0",

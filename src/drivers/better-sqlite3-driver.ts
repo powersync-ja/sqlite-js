@@ -33,6 +33,8 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   private statements = new Map<number, bsqlite.Statement>();
   private iterators = new Map<number, Iterator<unknown>>();
   private inError: any = null;
+  private bindNamed = new Map<number, Record<string, SqliteValue>>();
+  private bindPositional = new Map<number, SqliteValue[]>();
 
   constructor(path: string, options?: bsqlite.Options) {
     this.con = new DatabaseConstructor(path, options);
@@ -49,6 +51,8 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
       const existing = this.statements.get(0);
       if (existing != null && id == 0) {
         // Overwrite
+        this.bindNamed.delete(id);
+        this.bindPositional.delete(id);
       } else if (existing != null) {
         throw new Error(
           `Replacing statement ${id} without finalizing the previous one`
@@ -64,13 +68,29 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     } else if ('bind' in command) {
       const { id, parameters } = command.bind;
       const statement = this.statements.get(id)!;
-      statement.bind(parameters);
+      if (Array.isArray(parameters)) {
+        let bindArray = this.bindPositional.get(id) ?? [];
+
+        for (let i = 0; i < parameters.length; i++) {
+          if (typeof parameters[i] != 'undefined') {
+            bindArray[i] = parameters[i]!;
+          }
+        }
+        this.bindPositional.set(id, bindArray);
+      } else {
+        let previous = this.bindNamed.get(id) ?? {};
+
+        this.bindNamed.set(id, { ...previous, ...parameters });
+      }
       return {};
     } else if ('step' in command) {
       const { id, n, all, bigint } = command.step;
       const statement = this.statements.get(id)!;
+      const bindNamed = this.bindNamed.get(id);
+      const bindPositional = this.bindPositional.get(id);
+      const bind = [bindPositional, bindNamed].filter((b) => b != null);
       if (!statement.reader) {
-        statement.run();
+        statement.run(...bind);
         return { rows: [], done: true };
       }
 
@@ -79,49 +99,49 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
         statement.safeIntegers();
       }
 
-      if (all) {
-        const rows = statement.all() as SqliteValue[][];
-        return { rows, done: true };
-      } else {
-        const num_rows = n ?? 1;
-        let iterator = this.iterators.get(id);
-        if (iterator == null) {
-          iterator = statement.iterate();
-          this.iterators.set(id, iterator);
-        }
-        let rows = [];
-        let isDone = false;
-        for (let i = 0; i < num_rows; i++) {
-          const { value, done } = iterator.next();
-          if (done) {
-            isDone = true;
-            this.iterators.delete(id);
-            break;
-          }
-          rows.push(value);
-        }
-
-        return { rows, done: isDone };
+      const num_rows = n ?? 1;
+      let iterator = this.iterators.get(id);
+      if (iterator == null) {
+        iterator = statement.iterate(...bind);
+        this.iterators.set(id, iterator);
       }
+      let rows = [];
+      let isDone = false;
+      for (let i = 0; i < num_rows || all; i++) {
+        const { value, done } = iterator.next();
+        if (done) {
+          isDone = true;
+          this.iterators.delete(id);
+          break;
+        }
+        rows.push(value);
+      }
+      return { rows, done: isDone };
     } else if ('reset' in command) {
       const { id, clear_bindings } = command.reset;
       const statement = this.statements.get(id)!;
-      // FIXME
+      if (this.iterators.has(id)) {
+        const iter = this.iterators.get(id)!;
+        while (true) {
+          const { value, done } = iter.next();
+          if (done) {
+            break;
+          }
+        }
+        this.iterators.delete(id);
+      }
+      if (clear_bindings) {
+        this.bindNamed.delete(id);
+        this.bindPositional.delete(id);
+      }
       return {};
     } else if ('finalize' in command) {
       const { id } = command.finalize;
       const statement = this.statements.get(id)!;
       this.statements.delete(id);
+      this.bindNamed.delete(id);
+      this.bindPositional.delete(id);
       return {};
-    } else if ('last_insert_row_id' in command) {
-      const row = this.con
-        .prepare('select last_insert_rowid()')
-        .raw()
-        .get() as any;
-      return { last_insert_row_id: BigInt(row[0]) };
-    } else if ('changes' in command) {
-      const row = this.con.prepare('select changes()').raw().get() as any;
-      return { changes: row[0] };
     } else {
       throw new Error(`Unknown command: ${Object.keys(command)[0]}`);
     }
@@ -138,6 +158,8 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
         }
         if (this.statements.has(0)) {
           this.statements.delete(0);
+          this.bindNamed.delete(0);
+          this.bindPositional.delete(0);
         }
         this.inError = null;
       } else if (this.inError) {
