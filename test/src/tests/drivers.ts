@@ -32,7 +32,7 @@ export function describeDriverTests(
 
     test('basic select', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
@@ -57,7 +57,7 @@ export function describeDriverTests(
 
     test('big number', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
@@ -107,7 +107,7 @@ export function describeDriverTests(
 
     test('bigint', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results1 = await connection.execute([
         {
           prepare: {
@@ -162,7 +162,7 @@ export function describeDriverTests(
 
     test('insert returning', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
@@ -200,7 +200,7 @@ export function describeDriverTests(
 
     test('bind named args', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
@@ -231,7 +231,7 @@ export function describeDriverTests(
 
     test.skip('skip named arg', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
@@ -262,7 +262,7 @@ export function describeDriverTests(
 
     test('rebind arg', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
@@ -299,7 +299,7 @@ export function describeDriverTests(
 
     test('partial rebind', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
@@ -336,7 +336,7 @@ export function describeDriverTests(
 
     test('positional parameters', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
@@ -367,7 +367,7 @@ export function describeDriverTests(
 
     test('positional specific parameters', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
@@ -398,7 +398,7 @@ export function describeDriverTests(
 
     test('positional parameters partial rebind', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
@@ -435,7 +435,7 @@ export function describeDriverTests(
 
     test('named and positional parameters', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
@@ -472,7 +472,7 @@ export function describeDriverTests(
 
     test('reset parameters', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
@@ -540,7 +540,7 @@ export function describeDriverTests(
 
     test('partial reset', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
@@ -613,7 +613,7 @@ export function describeDriverTests(
 
     test('multiple insert step', async () => {
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       const results = await connection.execute([
         {
           prepare: {
@@ -695,7 +695,7 @@ export function describeDriverTests(
       // Skipped: Not properly implemented yet.
 
       await using driver = await open();
-      using connection = await driver.reserveConnection();
+      await using connection = await driver.reserveConnection();
       // await connection.run(
       //   "create table test_data(id integer primary key, data text)"
       // );

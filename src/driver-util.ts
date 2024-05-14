@@ -41,7 +41,8 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
     }
     const reserved: ReservedConnection = new ReservedConnectionImpl(
       this.connection,
-      () => {
+      async () => {
+        // TODO: sync
         if (this.inUse === reserved) {
           this.inUse = null;
           Promise.resolve().then(() => this.next());
@@ -113,14 +114,14 @@ interface QueuedPoolItem {
 }
 
 class ReservedConnectionImpl implements ReservedConnection {
-  [Symbol.dispose]: () => void = undefined as any as () => void;
+  [Symbol.asyncDispose]: () => Promise<void> = undefined as any;
 
   constructor(
-    private connection: SqliteDriverConnection,
-    public release: () => void
+    public connection: SqliteDriverConnection,
+    public release: () => Promise<void>
   ) {
-    if (typeof Symbol.dispose != 'undefined') {
-      this[Symbol.dispose] = release;
+    if (typeof Symbol.asyncDispose != 'undefined') {
+      this[Symbol.asyncDispose] = release;
     }
   }
 
@@ -204,7 +205,8 @@ class MultiConnectionPool implements SqliteDriverConnectionPool {
     }
 
     item.resolve(
-      new ReservedConnectionImpl(connection, () => {
+      new ReservedConnectionImpl(connection, async () => {
+        /// TODO: sync
         this._availableReadConnections.push(connection);
         Promise.resolve().then(() => this.next());
       })

@@ -115,8 +115,11 @@ export interface UpdateEvent {
 }
 
 export interface ReservedConnection extends SqliteDriverConnection {
-  release(): void;
-  [Symbol.dispose](): void;
+  /** Direct handle to the underlying connection. */
+  connection: SqliteDriverConnection;
+
+  release(): Promise<void>;
+  [Symbol.asyncDispose](): Promise<void>;
 }
 
 export interface ReserveConnectionOptions {

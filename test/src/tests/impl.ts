@@ -10,7 +10,6 @@ export function describeImplTests(
 ) {
   describe(`${name} - api tests`, () => {
     let dbPath: string;
-    let _dbs: ConnectionPoolImpl[] = [];
 
     const open = async () => {
       const dir = path.dirname(dbPath);
@@ -20,9 +19,7 @@ export function describeImplTests(
       try {
         await fs.rm(dbPath);
       } catch (e) {}
-      const db = factory(dbPath);
-      _dbs.push(db);
-      return db;
+      return factory(dbPath);
     };
 
     beforeEach(({ expect }) => {
@@ -32,24 +29,16 @@ export function describeImplTests(
       dbPath = `test-db/${testNameSanitized}.db`;
     });
 
-    afterEach(async () => {
-      const closeDbs = _dbs;
-      _dbs = [];
-      for (let db of closeDbs) {
-        await db.close();
-      }
-    });
-
     test('basic select', async () => {
-      const driver = await open();
-      using connection = await driver.reserveConnection();
+      await using db = await open();
+      await using connection = await db.reserveConnection();
       const results = await connection.select('select 1 as one');
       expect(results).toEqual([{ one: 1 }]);
     });
 
     test('big number', async () => {
-      const driver = await open();
-      using connection = await driver.reserveConnection();
+      await using db = await open();
+      await using connection = await db.reserveConnection();
       const results = await connection.select(
         'select 9223372036854775807 as bignumber'
       );
@@ -63,8 +52,8 @@ export function describeImplTests(
     });
 
     test('bigint', async () => {
-      const driver = await open();
-      using connection = await driver.reserveConnection();
+      await using db = await open();
+      await using connection = await db.reserveConnection();
 
       const rows1 = await connection.select(
         'select ? as bignumber',
@@ -83,8 +72,8 @@ export function describeImplTests(
     });
 
     test('insert returning', async () => {
-      const driver = await open();
-      using connection = await driver.reserveConnection();
+      await using db = await open();
+      await using connection = await db.reserveConnection();
       await connection.execute(
         'create table test_data(id integer primary key, data text)'
       );
@@ -96,8 +85,8 @@ export function describeImplTests(
     });
 
     test('runWithResults', async () => {
-      const driver = await open();
-      using connection = await driver.reserveConnection();
+      await using db = await open();
+      await using connection = await db.reserveConnection();
       await connection.execute(
         'create table test_data(id integer primary key, data text)'
       );
@@ -113,8 +102,8 @@ export function describeImplTests(
     });
 
     test('runWithResults - returning statement', async () => {
-      const driver = await open();
-      using connection = await driver.reserveConnection();
+      await using db = await open();
+      await using connection = await db.reserveConnection();
       await connection.execute(
         'create table test_data(id integer primary key, data text)'
       );
@@ -130,8 +119,8 @@ export function describeImplTests(
     });
 
     test('runWithResults - select', async () => {
-      const driver = await open();
-      using connection = await driver.reserveConnection();
+      await using db = await open();
+      await using connection = await db.reserveConnection();
       const results = await connection.execute('select 1 as one', undefined, {
         includeChanges: true,
         includeRowId: true
@@ -145,8 +134,8 @@ export function describeImplTests(
     test.skip('onUpdate', async () => {
       // Skipped: Not properly implemented yet.
 
-      const driver = await open();
-      using connection = await driver.reserveConnection();
+      await using db = await open();
+      await using connection = await db.reserveConnection();
       // await connection.run(
       //   "create table test_data(id integer primary key, data text)"
       // );

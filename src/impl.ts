@@ -5,6 +5,7 @@ import {
   QueryInterface,
   QueryOptions,
   ReserveConnectionOptions,
+  ReservedSqliteConnection,
   ResultSet,
   SqliteConnection,
   SqliteConnectionPool,
@@ -12,8 +13,11 @@ import {
   SqliteTransaction,
   StreamedExecuteOptions,
   TablesChangedEvent,
+  TablesChangedListener,
   TransactionCloseEvent,
-  TransactionOptions
+  TransactionCloseListener,
+  TransactionOptions,
+  UpdateListener
 } from './api.js';
 import { SqliteArguments, SqliteValue } from './common.js';
 import {
@@ -24,7 +28,15 @@ import {
 export class ConnectionPoolImpl
   implements SqliteConnectionPool, QueryInterface
 {
-  constructor(private driver: SqliteDriverConnectionPool) {}
+  private connections = new WeakMap<SqliteDriverConnection, SqliteConnection>();
+  [Symbol.asyncDispose]: () => Promise<void> = undefined as any;
+
+  constructor(private driver: SqliteDriverConnectionPool) {
+    if (typeof Symbol.asyncDispose != 'undefined') {
+      this[Symbol.asyncDispose] = () => this.close();
+    }
+  }
+
   prepare<T>(query: string): PreparedQuery<T> {
     throw new Error('Method not implemented.');
   }
@@ -75,7 +87,7 @@ export class ConnectionPoolImpl
 
   async reserveConnection(
     options?: ReserveConnectionOptions | undefined
-  ): Promise<SqliteConnection>;
+  ): Promise<ReservedSqliteConnection>;
 
   async reserveConnection<T>(
     callback:
@@ -83,17 +95,25 @@ export class ConnectionPoolImpl
       | ReserveConnectionOptions
       | undefined,
     options?: ReserveConnectionOptions | undefined
-  ): Promise<T | SqliteConnection> {
+  ): Promise<T | ReservedSqliteConnection> {
+    const resolvedOptions =
+      (typeof callback == 'function' ? options : callback) ?? {};
+
+    const con = await this.driver.reserveConnection(options ?? {});
+    let wrapped = this.connections.get(con);
+    if (wrapped == null) {
+      wrapped = new ConnectionImpl(con);
+      this.connections.set(con, wrapped);
+    }
+
     if (typeof callback == 'function') {
-      const con = await this.driver.reserveConnection(options ?? {});
       try {
-        return await callback(new ConnectionImpl(con));
+        return await callback(wrapped);
       } finally {
-        con.release();
+        await con.release();
       }
     } else {
-      const con = await this.driver.reserveConnection(callback ?? {});
-      return new ConnectionImpl(con);
+      return new ReservedConnectionImpl(wrapped, () => con.release());
     }
   }
 
@@ -102,16 +122,76 @@ export class ConnectionPoolImpl
   }
 }
 
+export class ReservedConnectionImpl implements ReservedSqliteConnection {
+  [Symbol.asyncDispose]: () => Promise<void> = undefined as any;
+
+  constructor(
+    public connection: SqliteConnection,
+    public release: () => Promise<void>
+  ) {
+    if (typeof Symbol.asyncDispose != 'undefined') {
+      this[Symbol.asyncDispose] = release;
+    }
+  }
+
+  transaction<T>(
+    callback: (tx: SqliteTransaction) => Promise<T>,
+    options?: TransactionOptions | undefined
+  ): Promise<T> {
+    return this.connection.transaction(callback, options);
+  }
+
+  onUpdate(
+    listener: UpdateListener,
+    options?:
+      | { tables?: string[] | undefined; batchLimit?: number | undefined }
+      | undefined
+  ): () => void {
+    return this.connection.onUpdate(listener, options);
+  }
+  onTransactionClose(listener: TransactionCloseListener): () => void {
+    return this.connection.onTransactionClose(listener);
+  }
+
+  onTablesChanged(listener: TablesChangedListener): () => void {
+    return this.connection.onTablesChanged(listener);
+  }
+
+  close(): Promise<void> {
+    return this.connection.close();
+  }
+
+  prepare<T>(query: string): PreparedQuery<T> {
+    return this.connection.prepare(query);
+  }
+
+  execute<T>(
+    query: string | PreparedQuery<T>,
+    args?: SqliteArguments | undefined,
+    options?: (ExecuteOptions & ReserveConnectionOptions) | undefined
+  ): Promise<ResultSet<T>> {
+    return this.connection.execute(query, args, options);
+  }
+
+  executeStreamed<T>(
+    query: string | PreparedQuery<T>,
+    args: SqliteArguments | undefined,
+    options?: (StreamedExecuteOptions & ReserveConnectionOptions) | undefined
+  ): AsyncGenerator<ResultSet<T>, any, unknown> {
+    return this.connection.executeStreamed(query, args, options);
+  }
+
+  select<T>(
+    query: string | PreparedQuery<T>,
+    args?: SqliteArguments | undefined,
+    options?: (QueryOptions & ReserveConnectionOptions) | undefined
+  ): Promise<T[]> {
+    return this.connection.select(query, args, options);
+  }
+}
+
 export class ConnectionImpl implements SqliteConnection {
   constructor(private driver: SqliteDriverConnection) {}
-
-  release(): Promise<void> {
-    throw new Error('Method not implemented.');
-  }
-
-  [Symbol.dispose](): void {
-    // throw new Error('Method not implemented.');
-  }
 
   async transaction<T>(
     callback: (tx: SqliteTransaction) => Promise<T>,

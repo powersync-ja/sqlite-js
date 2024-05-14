@@ -21,11 +21,22 @@ export interface SqliteConnectionPool {
    */
   reserveConnection(
     options?: ReserveConnectionOptions
-  ): Promise<SqliteConnection>;
+  ): Promise<ReservedSqliteConnection>;
+
+  close(): Promise<void>;
+  [Symbol.asyncDispose](): Promise<void>;
 }
 
 export interface ReserveConnectionOptions {
   readonly?: boolean;
+}
+
+export interface ReservedSqliteConnection extends SqliteConnection {
+  /** Direct handle to the underlying connection. */
+  connection: SqliteConnection;
+
+  release(): Promise<void>;
+  [Symbol.asyncDispose](): Promise<void>;
 }
 
 export interface QueryInterface {
@@ -114,8 +125,6 @@ export interface SqliteConnection extends QueryInterface {
   onTablesChanged(listener: TablesChangedListener): () => void;
 
   close(): Promise<void>;
-
-  release(): Promise<void>;
 }
 
 export interface BatchedUpdateEvent {
