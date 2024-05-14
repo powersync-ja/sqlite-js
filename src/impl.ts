@@ -209,10 +209,11 @@ export class ConnectionImpl implements SqliteConnection {
       }
 
       if (options?.includeChanges) {
-        const [[changes, rowid]] = await run(
+        const results = await run(
           this.driver,
           'select changes(), last_insert_rowid()'
         );
+        const [[changes, rowid]] = results;
         const rs = new ResultSetImpl<T>(columns, []);
         rs.changes = changes as number;
         rs.rowId = rowid as number;

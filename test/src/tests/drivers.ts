@@ -493,6 +493,11 @@ export function describeDriverTests(
           }
         },
         {
+          reset: {
+            id: 0
+          }
+        },
+        {
           step: {
             id: 0,
             all: true
@@ -517,6 +522,7 @@ export function describeDriverTests(
         ,
         ,
         { rows: rows1 },
+        ,
         { rows: rows2 },
         ,
         { error },
@@ -530,6 +536,79 @@ export function describeDriverTests(
       expect(error).toMatchObject({
         message: 'Too few parameter values were provided'
       });
+    });
+
+    test('partial reset', async () => {
+      await using driver = await open();
+      using connection = await driver.reserveConnection();
+      const results = await connection.execute([
+        {
+          prepare: {
+            id: 0,
+            sql: "select json_each.value as v from json_each('[1,2,3,4,5]')"
+          }
+        },
+        {
+          step: {
+            id: 0,
+            n: 3
+          }
+        },
+        {
+          reset: {
+            id: 0
+          }
+        },
+        {
+          step: {
+            id: 0,
+            n: 3
+          }
+        },
+        {
+          step: {
+            id: 0,
+            n: 3
+          }
+        },
+        {
+          step: {
+            id: 0,
+            n: 3
+          }
+        },
+        {
+          reset: {
+            id: 0
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
+        },
+        { sync: {} }
+      ]);
+
+      const [
+        ,
+        { rows: rows1 },
+        ,
+        { rows: rows2 },
+        { rows: rows3 },
+        { rows: rows4 },
+        ,
+        { rows: rows5 },
+        { error }
+      ] = results as any[];
+
+      expect(error).toBe(undefined);
+      expect(rows1).toEqual([[1], [2], [3]]);
+      expect(rows2).toEqual([[1], [2], [3]]);
+      expect(rows3).toEqual([[4], [5]]);
+      expect(rows4).toEqual([]);
+      expect(rows5).toEqual([[1], [2], [3], [4], [5]]);
     });
 
     test.skip('onUpdate', async () => {

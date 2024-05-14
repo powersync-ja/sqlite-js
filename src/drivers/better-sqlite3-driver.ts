@@ -51,8 +51,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
       const existing = this.statements.get(0);
       if (existing != null && id == 0) {
         // Overwrite
-        this.bindNamed.delete(id);
-        this.bindPositional.delete(id);
+        await this.executeCommand({ finalize: { id: 0 } });
       } else if (existing != null) {
         throw new Error(
           `Replacing statement ${id} without finalizing the previous one`
@@ -93,15 +92,13 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
         statement.run(...bind);
         return { rows: [], done: true };
       }
-
-      statement.raw();
-      if (bigint) {
-        statement.safeIntegers();
-      }
-
-      const num_rows = n ?? 1;
       let iterator = this.iterators.get(id);
+      const num_rows = n ?? 1;
       if (iterator == null) {
+        statement.raw();
+        if (bigint) {
+          statement.safeIntegers();
+        }
         iterator = statement.iterate(...bind);
         this.iterators.set(id, iterator);
       }
@@ -111,7 +108,6 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
         const { value, done } = iterator.next();
         if (done) {
           isDone = true;
-          this.iterators.delete(id);
           break;
         }
         rows.push(value);
@@ -122,12 +118,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
       const statement = this.statements.get(id)!;
       if (this.iterators.has(id)) {
         const iter = this.iterators.get(id)!;
-        while (true) {
-          const { value, done } = iter.next();
-          if (done) {
-            break;
-          }
-        }
+        iter.return!();
         this.iterators.delete(id);
       }
       if (clear_bindings) {
@@ -141,6 +132,11 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
       this.statements.delete(id);
       this.bindNamed.delete(id);
       this.bindPositional.delete(id);
+      const existingIter = this.iterators.get(id);
+      if (existingIter != null) {
+        existingIter.return?.();
+      }
+      this.iterators.delete(id);
       return {};
     } else {
       throw new Error(`Unknown command: ${Object.keys(command)[0]}`);
@@ -157,9 +153,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
           results.push({});
         }
         if (this.statements.has(0)) {
-          this.statements.delete(0);
-          this.bindNamed.delete(0);
-          this.bindPositional.delete(0);
+          await this.executeCommand({ finalize: { id: 0 } });
         }
         this.inError = null;
       } else if (this.inError) {
@@ -175,85 +169,6 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
       }
     }
     return results;
-  }
-
-  async selectAll(
-    query: string,
-    args?: SqliteArguments | undefined,
-    options?: ExecuteOptions | undefined
-  ): Promise<ResultSet> {
-    const statement = this.con.prepare(query);
-    const bindArgs = args == undefined ? [] : [args];
-    if (!statement.reader) {
-      statement.run(...bindArgs);
-      return { columns: [], rows: [] };
-    }
-    statement.raw();
-    if (options?.bigint) {
-      statement.safeIntegers();
-    }
-    const columns = statement.columns().map((c) => c.name);
-    const rows = statement.all(...bindArgs) as SqliteValue[][];
-    return {
-      columns,
-      rows
-    };
-  }
-
-  async *selectStreamed(
-    query: string,
-    args?: SqliteArguments,
-    options?: ExecuteOptions
-  ): AsyncGenerator<ResultSet, any, undefined> {
-    const bindArgs = args == undefined ? [] : [args];
-    const statement = this.con.prepare(query);
-    if (!statement.reader) {
-      statement.run(...bindArgs);
-      return;
-    }
-    statement.raw();
-    if (options?.bigint) {
-      statement.safeIntegers();
-    }
-    const columns = statement.columns().map((c) => c.name);
-    let buffer: SqliteValue[][] = [];
-    let didYield = false;
-    for (let row of statement.iterate(...bindArgs)) {
-      buffer.push(row as SqliteValue[]);
-      if (buffer.length > (options?.chunkSize ?? 10)) {
-        yield {
-          columns,
-          rows: buffer
-        };
-        didYield = true;
-        buffer = [];
-      }
-    }
-    if (buffer.length > 0 || !didYield) {
-      yield {
-        columns,
-        rows: buffer
-      };
-    }
-  }
-
-  async run(query: string, args?: SqliteArguments): Promise<void> {
-    const bindArgs = args == undefined ? [] : [args];
-    const statement = this.con.prepare(query);
-    statement.run(...bindArgs);
-  }
-
-  async runWithResults(
-    query: string,
-    args?: SqliteArguments
-  ): Promise<RunResults> {
-    const statement = this.con.prepare(query);
-    const bindArgs = args == undefined ? [] : [args];
-    const r = statement.run(...bindArgs);
-    return {
-      changes: r.changes,
-      lastInsertRowId: BigInt(r.lastInsertRowid)
-    };
   }
 
   dispose(): void {
