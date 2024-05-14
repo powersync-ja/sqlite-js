@@ -35,6 +35,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   private inError: any = null;
   private bindNamed = new Map<number, Record<string, SqliteValue>>();
   private bindPositional = new Map<number, SqliteValue[]>();
+  private statementDone = new Map<number, boolean>();
 
   constructor(path: string, options?: bsqlite.Options) {
     this.con = new DatabaseConstructor(path, options);
@@ -84,12 +85,17 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
       return {};
     } else if ('step' in command) {
       const { id, n, all, bigint } = command.step;
+      if (this.statementDone.has(id)) {
+        // TODO: different flag to indicate we did nothing?
+        return { rows: [], done: true };
+      }
       const statement = this.statements.get(id)!;
       const bindNamed = this.bindNamed.get(id);
       const bindPositional = this.bindPositional.get(id);
       const bind = [bindPositional, bindNamed].filter((b) => b != null);
       if (!statement.reader) {
         statement.run(...bind);
+        this.statementDone.set(id, true);
         return { rows: [], done: true };
       }
       let iterator = this.iterators.get(id);
@@ -112,6 +118,9 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
         }
         rows.push(value);
       }
+      if (isDone) {
+        this.statementDone.set(id, true);
+      }
       return { rows, done: isDone };
     } else if ('reset' in command) {
       const { id, clear_bindings } = command.reset;
@@ -125,6 +134,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
         this.bindNamed.delete(id);
         this.bindPositional.delete(id);
       }
+      this.statementDone.delete(id);
       return {};
     } else if ('finalize' in command) {
       const { id } = command.finalize;
@@ -137,6 +147,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
         existingIter.return?.();
       }
       this.iterators.delete(id);
+      this.statementDone.delete(id);
       return {};
     } else {
       throw new Error(`Unknown command: ${Object.keys(command)[0]}`);

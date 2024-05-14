@@ -611,6 +611,86 @@ export function describeDriverTests(
       expect(rows5).toEqual([[1], [2], [3], [4], [5]]);
     });
 
+    test('multiple insert step', async () => {
+      await using driver = await open();
+      using connection = await driver.reserveConnection();
+      const results = await connection.execute([
+        {
+          prepare: {
+            id: 0,
+            sql: 'create table test_data(id integer primary key, data text)'
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
+        },
+        {
+          prepare: {
+            id: 0,
+            sql: "insert into test_data(data) values('test')"
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
+        },
+        {
+          reset: {
+            id: 0
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
+        },
+        {
+          prepare: {
+            id: 0,
+            sql: 'select count(*) from test_data'
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
+        },
+        { sync: {} }
+      ]);
+
+      const [
+        ,
+        ,
+        ,
+        { rows: rows1 },
+        { rows: rows2 },
+        ,
+        { rows: rows3 },
+        ,
+        { rows: rows4 },
+        { error }
+      ] = results as any[];
+
+      expect(error).toBe(undefined);
+      expect(rows1).toEqual([]);
+      expect(rows2).toEqual([]);
+      expect(rows3).toEqual([]);
+      expect(rows4).toEqual([[2]]);
+    });
+
     test.skip('onUpdate', async () => {
       // Skipped: Not properly implemented yet.
 
