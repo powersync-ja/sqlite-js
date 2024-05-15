@@ -18,7 +18,18 @@ if (port != null) {
     } else if (message == 'execute') {
       const commands = args;
 
-      const results = await db!.execute(commands);
+      const results = (await db!.execute(commands)).map((r) => {
+        if ((r as any)?.error) {
+          return {
+            error: {
+              code: (r as any).error.code,
+              message: (r as any).error.message
+            }
+          };
+        } else {
+          return r;
+        }
+      });
       port.postMessage({
         id,
         value: results

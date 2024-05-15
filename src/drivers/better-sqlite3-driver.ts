@@ -1,15 +1,20 @@
 import type * as bsqlite from 'better-sqlite3';
 import DatabaseConstructor from 'better-sqlite3';
-import { SqliteArguments, SqliteValue } from '../common.js';
+import { SqliteValue } from '../common.js';
 import {
-  CommandResult,
-  ExecuteOptions,
-  ResultSet,
-  RunResults,
+  SqliteCommandResponse,
+  InferBatchResult,
   SqliteCommand,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
-  UpdateListener
+  SqlitePrepare,
+  SqlitePrepareResponse,
+  SqliteStepResponse,
+  UpdateListener,
+  SqliteBind,
+  SqliteStep,
+  SqliteReset,
+  SqliteFinalize
 } from '../driver-api.js';
 
 import { ReadWriteConnectionPool } from '../driver-util.js';
@@ -45,117 +50,150 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     this.con.close();
   }
 
-  private async executeCommand(command: SqliteCommand): Promise<CommandResult> {
-    if ('prepare' in command) {
-      const { id, sql } = command.prepare;
-      const statement = this.con.prepare(sql);
-      const existing = this.statements.get(0);
-      if (existing != null && id == 0) {
-        // Overwrite
-        await this.executeCommand({ finalize: { id: 0 } });
-      } else if (existing != null) {
-        throw new Error(
-          `Replacing statement ${id} without finalizing the previous one`
-        );
-      }
-      this.statements.set(id, statement);
-      if (statement.reader) {
-        const columns = statement.columns().map((c) => c.name);
-        return { columns };
-      } else {
-        return { columns: [] };
-      }
-    } else if ('bind' in command) {
-      const { id, parameters } = command.bind;
-      const statement = this.statements.get(id)!;
-      if (Array.isArray(parameters)) {
-        let bindArray = this.bindPositional.get(id) ?? [];
+  private requireStatement(id: number) {
+    const statement = this.statements.get(id);
+    if (statement == null) {
+      throw new Error(`statement not found: ${id}`);
+    }
+    return statement;
+  }
 
-        for (let i = 0; i < parameters.length; i++) {
-          if (typeof parameters[i] != 'undefined') {
-            bindArray[i] = parameters[i]!;
-          }
-        }
-        this.bindPositional.set(id, bindArray);
-      } else {
-        let previous = this.bindNamed.get(id) ?? {};
+  private prepare(command: SqlitePrepare): SqlitePrepareResponse {
+    const { id, sql } = command.prepare;
+    const statement = this.con.prepare(sql);
+    const existing = this.statements.get(id);
+    if (existing != null && id == 0) {
+      // Overwrite
+      this.finalize({ finalize: { id: id } });
+    } else if (existing != null) {
+      throw new Error(
+        `Replacing statement ${id} without finalizing the previous one`
+      );
+    }
+    this.statements.set(id, statement);
+    if (statement.reader) {
+      const columns = statement.columns().map((c) => c.name);
+      return { columns };
+    } else {
+      return { columns: [] };
+    }
+  }
 
-        this.bindNamed.set(id, { ...previous, ...parameters });
-      }
+  private bind(command: SqliteBind): SqliteCommandResponse {
+    const { id, parameters } = command.bind;
+    const statement = this.requireStatement(id);
+    if (parameters == null) {
       return {};
-    } else if ('step' in command) {
-      const { id, n, all, bigint } = command.step;
-      if (this.statementDone.has(id)) {
-        // TODO: different flag to indicate we did nothing?
-        return { rows: [], done: true };
-      }
-      const statement = this.statements.get(id)!;
-      const bindNamed = this.bindNamed.get(id);
-      const bindPositional = this.bindPositional.get(id);
-      const bind = [bindPositional, bindNamed].filter((b) => b != null);
-      if (!statement.reader) {
-        statement.run(...bind);
-        this.statementDone.set(id, true);
-        return { rows: [], done: true };
-      }
-      let iterator = this.iterators.get(id);
-      const num_rows = n ?? 1;
-      if (iterator == null) {
-        statement.raw();
-        if (bigint) {
-          statement.safeIntegers();
+    }
+    if (Array.isArray(parameters)) {
+      let bindArray = this.bindPositional.get(id) ?? [];
+
+      for (let i = 0; i < parameters.length; i++) {
+        if (typeof parameters[i] != 'undefined') {
+          bindArray[i] = parameters[i]!;
         }
-        iterator = statement.iterate(...bind);
-        this.iterators.set(id, iterator);
       }
-      let rows = [];
-      let isDone = false;
-      for (let i = 0; i < num_rows || all; i++) {
-        const { value, done } = iterator.next();
-        if (done) {
-          isDone = true;
-          break;
-        }
-        rows.push(value);
+      this.bindPositional.set(id, bindArray);
+    } else {
+      let previous = this.bindNamed.get(id) ?? {};
+
+      this.bindNamed.set(id, { ...previous, ...parameters });
+    }
+    return {};
+  }
+
+  private step(command: SqliteStep): SqliteStepResponse {
+    const { id, n, all, bigint } = command.step;
+    const statement = this.requireStatement(id);
+    if (this.statementDone.has(id)) {
+      return { skipped: true } as SqliteStepResponse;
+    }
+    const bindNamed = this.bindNamed.get(id);
+    const bindPositional = this.bindPositional.get(id);
+    const bind = [bindPositional, bindNamed].filter((b) => b != null);
+    if (!statement.reader) {
+      statement.run(...bind);
+      this.statementDone.set(id, true);
+      return { rows: [], done: true } as SqliteStepResponse;
+    }
+    let iterator = this.iterators.get(id);
+    const num_rows = n ?? 1;
+    if (iterator == null) {
+      statement.raw();
+      if (bigint) {
+        statement.safeIntegers();
       }
-      if (isDone) {
-        this.statementDone.set(id, true);
+      iterator = statement.iterate(...bind);
+      this.iterators.set(id, iterator);
+    }
+    let rows = [];
+    let isDone = false;
+    for (let i = 0; i < num_rows || all; i++) {
+      const { value, done } = iterator.next();
+      if (done) {
+        isDone = true;
+        break;
       }
-      return { rows, done: isDone };
-    } else if ('reset' in command) {
-      const { id, clear_bindings } = command.reset;
-      const statement = this.statements.get(id)!;
-      if (this.iterators.has(id)) {
-        const iter = this.iterators.get(id)!;
-        iter.return!();
-        this.iterators.delete(id);
-      }
-      if (clear_bindings) {
-        this.bindNamed.delete(id);
-        this.bindPositional.delete(id);
-      }
-      this.statementDone.delete(id);
-      return {};
-    } else if ('finalize' in command) {
-      const { id } = command.finalize;
-      const statement = this.statements.get(id)!;
-      this.statements.delete(id);
+      rows.push(value);
+    }
+    if (isDone) {
+      this.statementDone.set(id, true);
+    }
+    return { rows, done: isDone } as SqliteStepResponse;
+  }
+
+  private reset(command: SqliteReset): SqliteCommandResponse {
+    const { id, clear_bindings } = command.reset;
+    const statement = this.requireStatement(id);
+    if (this.iterators.has(id)) {
+      const iter = this.iterators.get(id)!;
+      iter.return!();
+      this.iterators.delete(id);
+    }
+    if (clear_bindings) {
       this.bindNamed.delete(id);
       this.bindPositional.delete(id);
-      const existingIter = this.iterators.get(id);
-      if (existingIter != null) {
-        existingIter.return?.();
-      }
-      this.iterators.delete(id);
-      this.statementDone.delete(id);
-      return {};
+    }
+    this.statementDone.delete(id);
+    return {};
+  }
+
+  private finalize(command: SqliteFinalize): SqliteCommandResponse {
+    const { id } = command.finalize;
+    this.statements.delete(id);
+    this.bindNamed.delete(id);
+    this.bindPositional.delete(id);
+    const existingIter = this.iterators.get(id);
+    if (existingIter != null) {
+      existingIter.return?.();
+    }
+    this.iterators.delete(id);
+    this.statementDone.delete(id);
+    return {};
+  }
+
+  private executeCommand(command: SqliteCommand): SqliteCommandResponse {
+    if ('prepare' in command) {
+      return this.prepare(command);
+    } else if ('bind' in command) {
+      return this.bind(command);
+    } else if ('step' in command) {
+      return this.step(command);
+    } else if ('reset' in command) {
+      return this.reset(command);
+    } else if ('finalize' in command) {
+      return this.finalize(command);
     } else {
       throw new Error(`Unknown command: ${Object.keys(command)[0]}`);
     }
   }
 
-  async execute(commands: SqliteCommand[]): Promise<CommandResult[]> {
-    let results: CommandResult[] = [];
+  async execute<const T extends SqliteCommand[]>(
+    commands: T
+  ): Promise<InferBatchResult<T>> {
+    // console.log('execute', commands);
+    let results: SqliteCommandResponse[] = [];
+
     for (let command of commands) {
       if ('sync' in command) {
         if (this.inError != null) {
@@ -164,22 +202,22 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
           results.push({});
         }
         if (this.statements.has(0)) {
-          await this.executeCommand({ finalize: { id: 0 } });
+          this.executeCommand({ finalize: { id: 0 } });
         }
         this.inError = null;
       } else if (this.inError) {
-        results.push({ skip: true });
+        results.push({ skipped: true });
       } else {
         try {
-          const result = await this.executeCommand(command);
+          const result = this.executeCommand(command);
           results.push(result);
         } catch (e) {
           this.inError = e;
-          results.push({ error: e });
+          results.push({ error: e as any });
         }
       }
     }
-    return results;
+    return results as InferBatchResult<T>;
   }
 
   dispose(): void {

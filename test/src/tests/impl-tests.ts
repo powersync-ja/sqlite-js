@@ -131,6 +131,20 @@ export function describeImplTests(
       expect(results.rowId).toEqual(0);
     });
 
+    test('transaction', async () => {
+      await using db = await open();
+      await using connection = await db.reserveConnection();
+      const results1 = await connection.transaction(async () => {
+        return await connection.select('select 1 as one');
+      });
+      const results2 = await connection.transaction(async () => {
+        return await connection.select('select 1 as one');
+      });
+
+      expect(results1).toEqual([{ one: 1 }]);
+      expect(results2).toEqual([{ one: 1 }]);
+    });
+
     test.skip('onUpdate', async () => {
       // Skipped: Not properly implemented yet.
 

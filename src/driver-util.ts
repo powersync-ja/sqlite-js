@@ -1,5 +1,5 @@
 import {
-  CommandResult,
+  InferBatchResult,
   ReserveConnectionOptions,
   ReservedConnection,
   SqliteCommand,
@@ -13,9 +13,6 @@ interface QueuedItem {
   resolve: (reserved: ReservedConnection) => void;
   reject: (err: any) => void;
 }
-
-const dispose: typeof Symbol.dispose =
-  Symbol.dispose ?? Symbol('dispose undefined');
 
 export class SingleConnectionPool implements SqliteDriverConnectionPool {
   private queue: QueuedItem[] = [];
@@ -125,7 +122,9 @@ class ReservedConnectionImpl implements ReservedConnection {
     }
   }
 
-  execute(commands: SqliteCommand[]): Promise<CommandResult[]> {
+  execute<const T extends SqliteCommand[]>(
+    commands: T
+  ): Promise<InferBatchResult<T>> {
     return this.connection.execute(commands);
   }
 

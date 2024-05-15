@@ -1,5 +1,13 @@
 import { SqliteArguments, SqliteValue } from './common.js';
 
+export interface SqliteCommandResponse {
+  error?: {
+    message: string;
+    code: string;
+  };
+  skipped?: true;
+}
+
 export interface SqlitePrepare {
   prepare: {
     id: number;
@@ -7,10 +15,18 @@ export interface SqlitePrepare {
   };
 }
 
+export interface SqlitePrepareResponse extends SqliteCommandResponse {
+  columns?: string[];
+}
+
 export interface SqliteBind {
   bind: {
     id: number;
-    parameters: (SqliteValue | undefined)[] | Record<string, SqliteValue>;
+    parameters:
+      | (SqliteValue | undefined)[]
+      | Record<string, SqliteValue>
+      | null
+      | undefined;
   };
 }
 
@@ -21,6 +37,11 @@ export interface SqliteStep {
     all?: boolean;
     bigint?: boolean;
   };
+}
+
+export interface SqliteStepResponse extends SqliteCommandResponse {
+  rows?: SqliteValue[][];
+  done?: boolean;
 }
 
 export interface SqliteReset {
@@ -39,15 +60,6 @@ export interface SqliteFinalize {
 export interface SqliteSync {
   sync: {};
 }
-export interface SqliteChanges {
-  changes: {};
-}
-export interface SqliteTotalChanges {
-  total_changes: {};
-}
-export interface SqliteLastInsertRowId {
-  last_insert_row_id: {};
-}
 
 export type SqliteCommand =
   | SqlitePrepare
@@ -55,23 +67,23 @@ export type SqliteCommand =
   | SqliteStep
   | SqliteReset
   | SqliteFinalize
-  | SqliteSync
-  | SqliteChanges
-  | SqliteTotalChanges
-  | SqliteLastInsertRowId;
+  | SqliteSync;
 
-export interface SqliteCommandBatch {
-  commands: SqliteCommand[];
-}
+export type InferCommandResult<T extends SqliteCommand> =
+  T extends SqlitePrepare
+    ? SqlitePrepareResponse
+    : T extends SqliteStep
+      ? SqliteStepResponse
+      : SqliteCommandResponse;
 
-export type CommandResult = {};
-
-export interface SqliteBatchResult {
-  results: CommandResult[];
-}
+export type InferBatchResult<T extends SqliteCommand[]> = {
+  [i in keyof T]: InferCommandResult<T[i]>;
+};
 
 export interface SqliteDriverConnection {
-  execute(commands: SqliteCommand[]): Promise<CommandResult[]>;
+  execute<const T extends SqliteCommand[]>(
+    commands: T
+  ): Promise<InferBatchResult<T>>;
 
   onUpdate(
     listener: UpdateListener,

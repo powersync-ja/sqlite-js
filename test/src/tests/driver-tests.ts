@@ -1,8 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test } from 'vitest';
 import { SqliteDriverConnectionPool } from '../../../lib/driver-api.js';
-import { SqliteValue } from '../../../lib/common.js';
 
 export function describeDriverTests(
   name: string,
@@ -49,7 +48,7 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [{ columns }, { rows }] = results as any[];
+      const [{ columns }, { rows }] = results;
 
       expect(columns).toEqual(['one']);
       expect(rows).toEqual([[1]]);
@@ -74,7 +73,7 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, { rows }] = results as any[];
+      const [, { rows }] = results;
 
       expect(rows).toEqual([[9223372036854776000]]);
 
@@ -100,7 +99,7 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, , { rows: rows2 }] = results2 as any[];
+      const [, , { rows: rows2 }] = results2;
 
       expect(rows2).toEqual([[9223372036854776000]]);
     });
@@ -131,7 +130,7 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, , { rows: rows1 }, { error: error1 }] = results1 as any[];
+      const [, , { rows: rows1 }, { error: error1 }] = results1;
 
       expect(error1).toBe(undefined);
       expect(rows1).toEqual([[9223372036854775807n]]);
@@ -153,7 +152,7 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, { rows: rows2 }, { error }] = results2 as any[];
+      const [, { rows: rows2 }, { error }] = results2;
 
       expect(error).toBe(undefined);
 
@@ -191,7 +190,7 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, , { columns }, { rows }, { error }] = results as any[];
+      const [, , { columns }, { rows }, { error }] = results;
 
       expect(error).toBe(undefined);
       expect(columns).toEqual(['id']);
@@ -223,7 +222,7 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, , { rows }, { error }] = results as any[];
+      const [, , { rows }, { error }] = results;
 
       expect(error).toBe(undefined);
       expect(rows).toEqual([[1, 2]]);
@@ -254,7 +253,7 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, , { rows }, { error }] = results as any[];
+      const [, , { rows }, { error }] = results;
 
       expect(error).toBe(undefined);
       expect(rows).toEqual([[null, 2]]);
@@ -291,7 +290,7 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, , , { rows }, { error }] = results as any[];
+      const [, , , { rows }, { error }] = results;
 
       expect(error).toBe(undefined);
       expect(rows).toEqual([[11, 22]]);
@@ -328,7 +327,7 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, , , { rows }, { error }] = results as any[];
+      const [, , , { rows }, { error }] = results;
 
       expect(error).toBe(undefined);
       expect(rows).toEqual([[1, 22]]);
@@ -359,7 +358,7 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, , { rows }, { error }] = results as any[];
+      const [, , { rows }, { error }] = results;
 
       expect(error).toBe(undefined);
       expect(rows).toEqual([[1, 2]]);
@@ -390,7 +389,7 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, , { rows }, { error }] = results as any[];
+      const [, , { rows }, { error }] = results;
 
       expect(error).toBe(undefined);
       expect(rows).toEqual([[2, 1]]);
@@ -427,7 +426,7 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, , , { rows }, { error }] = results as any[];
+      const [, , , { rows }, { error }] = results;
 
       expect(error).toBe(undefined);
       expect(rows).toEqual([[1, 22]]);
@@ -464,7 +463,7 @@ export function describeDriverTests(
         { sync: {} }
       ]);
 
-      const [, , , { rows }, { error }] = results as any[];
+      const [, , , { rows }, { error }] = results;
 
       expect(error).toBe(undefined);
       expect(rows).toEqual([[1, 3, 2]]);
@@ -597,7 +596,7 @@ export function describeDriverTests(
         ,
         { rows: rows2 },
         { rows: rows3 },
-        { rows: rows4 },
+        { rows: rows4, skipped: skipped4 },
         ,
         { rows: rows5 },
         { error }
@@ -607,7 +606,8 @@ export function describeDriverTests(
       expect(rows1).toEqual([[1], [2], [3]]);
       expect(rows2).toEqual([[1], [2], [3]]);
       expect(rows3).toEqual([[4], [5]]);
-      expect(rows4).toEqual([]);
+      expect(rows4).toBe(undefined);
+      expect(skipped4).toBe(true);
       expect(rows5).toEqual([[1], [2], [3], [4], [5]]);
     });
 
@@ -676,7 +676,7 @@ export function describeDriverTests(
         ,
         ,
         { rows: rows1 },
-        { rows: rows2 },
+        { rows: rows2, skipped: skipped2 },
         ,
         { rows: rows3 },
         ,
@@ -686,9 +686,173 @@ export function describeDriverTests(
 
       expect(error).toBe(undefined);
       expect(rows1).toEqual([]);
-      expect(rows2).toEqual([]);
+      expect(rows2).toBe(undefined);
+      expect(skipped2).toBe(true);
       expect(rows3).toEqual([]);
       expect(rows4).toEqual([[2]]);
+    });
+
+    test('error handling - prepare', async () => {
+      await using driver = await open();
+      await using connection = await driver.reserveConnection();
+      const results = await connection.execute([
+        {
+          prepare: {
+            id: 0,
+            sql: 'select foobar'
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
+        },
+        { sync: {} }
+      ]);
+
+      const [{ columns, error: error1 }, { rows }, { error: error2 }] = results;
+
+      expect(rows).toBe(undefined);
+      expect(error1).toMatchObject({
+        code: 'SQLITE_ERROR',
+        message: 'no such column: foobar'
+      });
+      expect(error2).toMatchObject({
+        code: 'SQLITE_ERROR',
+        message: 'no such column: foobar'
+      });
+    });
+
+    test('error handling - step', async () => {
+      await using driver = await open();
+      await using connection = await driver.reserveConnection();
+      const results = await connection.execute([
+        {
+          prepare: {
+            id: 0,
+            sql: "select json_each.value from json_each('test')"
+          }
+        },
+        {
+          step: {
+            id: 0,
+            all: true
+          }
+        },
+        { sync: {} }
+      ]);
+
+      const [
+        { columns, error: error1 },
+        { rows, error: error2 },
+        { error: error3 }
+      ] = results;
+
+      expect(rows).toBe(undefined);
+      expect(columns).toEqual(['value']);
+      expect(error1).toBe(undefined);
+      expect(error2).toMatchObject({
+        code: 'SQLITE_ERROR',
+        message: 'malformed JSON'
+      });
+      expect(error3).toMatchObject({
+        code: 'SQLITE_ERROR',
+        message: 'malformed JSON'
+      });
+    });
+
+    test('error recovery', async () => {
+      await using driver = await open();
+      await using connection = await driver.reserveConnection();
+      const results = await connection.execute([
+        {
+          prepare: {
+            id: 1,
+            sql: 'select json_each.value from json_each(?)'
+          }
+        },
+        {
+          bind: {
+            id: 1,
+            parameters: ['test']
+          }
+        },
+        {
+          step: {
+            id: 1,
+            all: true
+          }
+        },
+        {
+          step: {
+            id: 1,
+            all: true
+          }
+        },
+        { sync: {} },
+        {
+          step: {
+            id: 1,
+            all: true
+          }
+        },
+        {
+          reset: {
+            id: 1
+          }
+        },
+        {
+          bind: {
+            id: 1,
+            parameters: ['["test"]']
+          }
+        },
+        {
+          step: {
+            id: 1,
+            all: true
+          }
+        },
+        {
+          sync: {}
+        },
+        {
+          finalize: {
+            id: 1
+          }
+        }
+      ]);
+
+      const [
+        { columns }, // prepare
+        ,
+        // bind
+        { error: error1 }, // step
+        { skipped: skip1 }, // step
+        { error: error2 }, // sync
+        { rows: rows1 }, // step
+        ,
+        ,
+        // reset
+        // bind
+        { rows: rows2 }, // step
+        // sync
+        // finalize
+        ,
+      ] = results;
+
+      expect(error1).toMatchObject({
+        code: 'SQLITE_ERROR',
+        message: 'malformed JSON'
+      });
+      expect(skip1).toBe(true);
+      expect(error2).toMatchObject({
+        code: 'SQLITE_ERROR',
+        message: 'malformed JSON'
+      });
+      expect(rows1).toEqual([]);
+      expect(rows2).toEqual([['test']]);
     });
 
     test.skip('onUpdate', async () => {

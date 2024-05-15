@@ -1,7 +1,8 @@
 import type * as bsqlite from 'better-sqlite3';
+import DatabaseConstructor from 'better-sqlite3';
 import * as worker_threads from 'worker_threads';
 import {
-  CommandResult,
+  InferBatchResult,
   SqliteCommand,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
@@ -63,13 +64,22 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
     return id;
   }
 
-  private async post<T>(command: string, args: any) {
+  private async post<T>(command: string, args: any): Promise<T> {
     await this.ready;
     let id: number;
     const p = new Promise<T>((resolve) => {
       id = this.registerCallback(resolve);
     });
     this.worker.postMessage([command, id!, args]);
+    const result = await p;
+    if ((result as any)?.error) {
+      return {
+        error: new DatabaseConstructor.SqliteError(
+          (result as any).error.message,
+          (result as any).code
+        )
+      } as any;
+    }
     return p;
   }
 
@@ -82,7 +92,9 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
     await this.worker.terminate();
   }
 
-  async execute(commands: SqliteCommand[]): Promise<CommandResult[]> {
+  async execute<const T extends SqliteCommand[]>(
+    commands: T
+  ): Promise<InferBatchResult<T>> {
     return await this.post('execute', commands);
   }
 

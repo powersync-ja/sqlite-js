@@ -40,13 +40,13 @@ export interface ReservedSqliteConnection extends SqliteConnection {
 }
 
 export interface QueryInterface {
-  /**
-   * Advanced usage: Prepare a query. The query can be executed directly on the connection,
-   * or in a transaction.
-   *
-   * The query must be disposed before closing the connection.
-   */
-  prepare<T>(query: string): PreparedQuery<T>;
+  query<T>(
+    query: string,
+    args?: SqliteArguments,
+    options?: ReserveConnectionOptions
+  ): SqliteQuery<T>;
+
+  prepare<T>(query: string, args?: SqliteArguments): PreparedQuery<T>;
 
   /**
    * Convenience method, same as query(query, args).execute(options).
@@ -54,8 +54,8 @@ export interface QueryInterface {
    * When called on a connection pool, uses readonly: true by default.
    */
   execute<T>(
-    query: string | PreparedQuery<T>,
-    args?: SqliteArguments | undefined,
+    query: string,
+    args?: SqliteArguments,
     options?: ExecuteOptions & ReserveConnectionOptions
   ): Promise<ResultSet<T>>;
 
@@ -63,8 +63,8 @@ export interface QueryInterface {
    * Convenience method, same as query(query, args).executeStreamed(options).
    */
   executeStreamed<T>(
-    query: string | PreparedQuery<T>,
-    args: SqliteArguments | undefined,
+    query: string,
+    args: SqliteArguments,
     options?: StreamedExecuteOptions & ReserveConnectionOptions
   ): AsyncGenerator<ResultSet<T>>;
 
@@ -74,8 +74,8 @@ export interface QueryInterface {
    * When called on a connection pool, uses readonly: true by default.
    */
   select<T>(
-    query: string | PreparedQuery<T>,
-    args?: SqliteArguments | undefined,
+    query: string,
+    args?: SqliteArguments,
     options?: QueryOptions & ReserveConnectionOptions
   ): Promise<T[]>;
 }
@@ -178,7 +178,7 @@ export interface ResultSet<T = any> {
   changes?: number;
 
   columns: (keyof T)[];
-  raw_rows: SqliteValue[][];
+  cells: SqliteValue[][];
 
   /**
    * Convenience method to combine columns and rows into objects.
@@ -187,14 +187,13 @@ export interface ResultSet<T = any> {
 }
 
 export interface SqliteQuery<T> {
-  // Implementation note: The implementation only needs to provide one execute method,
-  // The rest can be provided by utilities.
+  /**
+   * Returns a query that can be used in a transaction.
+   */
+  in(transaction: SqliteTransaction): SqliteQuery<T>;
 
   executeStreamed(options?: StreamedExecuteOptions): AsyncGenerator<ResultSet>;
 
-  /**
-   * Convenience method.
-   */
   execute(options?: ExecuteOptions): Promise<ResultSet<T>>;
 
   /**
@@ -205,8 +204,11 @@ export interface SqliteQuery<T> {
   select(options?: QueryOptions): Promise<T[]>;
 }
 
-export interface PreparedQuery<T> {
-  dispose(): Promise<void>;
+export interface PreparedQuery<T> extends SqliteQuery<T> {
+  parse(): Promise<{ columns: string[] }>;
+
+  dispose(): void;
+  [Symbol.dispose](): void;
 }
 
 export interface QueryOptions {
