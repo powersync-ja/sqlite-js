@@ -1,7 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { SqliteDriverConnectionPool } from '../../../lib/driver-api.js';
+import { beforeEach, describe, expect, test } from 'vitest';
 import { ConnectionPoolImpl } from '../../../lib/impl.js';
 
 export function describeImplTests(

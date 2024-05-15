@@ -9,7 +9,7 @@ export interface SqliteConnectionPool {
    * @param callback
    * @param options
    */
-  reserveConnection<T>(
+  withReservedConnection<T>(
     callback: (connection: SqliteConnection) => Promise<T>,
     options?: ReserveConnectionOptions
   ): Promise<T>;
