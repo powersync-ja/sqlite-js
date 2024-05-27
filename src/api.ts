@@ -23,6 +23,14 @@ export interface SqliteConnectionPool {
     options?: ReserveConnectionOptions
   ): Promise<ReservedSqliteConnection>;
 
+  /**
+   * Start a transaction.
+   */
+  transaction<T>(
+    callback: (tx: SqliteTransaction) => Promise<T>,
+    options?: TransactionOptions & ReserveConnectionOptions
+  ): Promise<T>;
+
   close(): Promise<void>;
   [Symbol.asyncDispose](): Promise<void>;
 }
@@ -204,8 +212,25 @@ export interface SqliteQuery<T> {
   select(options?: QueryOptions): Promise<T[]>;
 }
 
-export interface PreparedQuery<T> extends SqliteQuery<T> {
+export interface PreparedQuery<T> {
   parse(): Promise<{ columns: string[] }>;
+
+  executeStreamed(
+    args?: SqliteArguments,
+    options?: StreamedExecuteOptions
+  ): AsyncGenerator<ResultSet>;
+
+  execute(
+    args?: SqliteArguments,
+    options?: ExecuteOptions
+  ): Promise<ResultSet<T>>;
+
+  /**
+   * Convenience method.
+   *
+   * Same as execute, but returns an array of row objects directly.
+   */
+  select(args?: SqliteArguments, options?: QueryOptions): Promise<T[]>;
 
   dispose(): void;
   [Symbol.dispose](): void;

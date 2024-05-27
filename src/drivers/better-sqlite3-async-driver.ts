@@ -8,6 +8,9 @@ import {
   SqliteDriverConnectionPool,
   UpdateListener
 } from '../driver-api.js';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
 
 import { ReadWriteConnectionPool } from '../driver-util.js';
 

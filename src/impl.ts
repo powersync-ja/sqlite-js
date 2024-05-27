@@ -59,13 +59,28 @@ export class ConnectionPoolImpl
     }
   }
 
+  async transaction<T>(
+    callback: (tx: SqliteTransaction) => Promise<T>,
+    options?: (TransactionOptions & ReserveConnectionOptions) | undefined
+  ): Promise<T> {
+    const r = await this.reserveConnection(options);
+    try {
+      return r.transaction(callback, options);
+    } finally {
+      await r.release();
+    }
+  }
+
   async *executeStreamed<T>(
     query: string,
     args?: SqliteArguments,
     options?: (StreamedExecuteOptions & ReserveConnectionOptions) | undefined
   ): AsyncGenerator<ResultSet<T>, any, unknown> {
+    console.log('getting connection');
     const r = await this.reserveConnection(options);
+    console.log('got connection?');
     try {
+      console.log('have con');
       return r.executeStreamed(query, args, options);
     } finally {
       await r.release();
@@ -90,10 +105,10 @@ export class ConnectionPoolImpl
     options?: ReserveConnectionOptions | undefined
   ): Promise<T> {
     const con = await this.driver.reserveConnection(options ?? {});
-    let wrapped = this.connections.get(con);
+    let wrapped = this.connections.get(con.connection);
     if (wrapped == null) {
-      wrapped = new ConnectionImpl(con);
-      this.connections.set(con, wrapped);
+      wrapped = new ConnectionImpl(con.connection);
+      this.connections.set(con.connection, wrapped);
     }
     try {
       return await callback(wrapped);
@@ -105,11 +120,13 @@ export class ConnectionPoolImpl
   async reserveConnection(
     options?: ReserveConnectionOptions | undefined
   ): Promise<ReservedSqliteConnection> {
+    console.log('driver reserve');
     const con = await this.driver.reserveConnection(options ?? {});
-    let wrapped = this.connections.get(con);
+    console.log('got driver con');
+    let wrapped = this.connections.get(con.connection);
     if (wrapped == null) {
-      wrapped = new ConnectionImpl(con);
-      this.connections.set(con, wrapped);
+      wrapped = new ConnectionImpl(con.connection);
+      this.connections.set(con.connection, wrapped);
     }
 
     return new ReservedConnectionImpl(wrapped, () => con.release());
@@ -263,18 +280,28 @@ export class ConnectionImpl implements SqliteConnection {
     args: SqliteArguments | undefined,
     options?: (ExecuteOptions & ReserveConnectionOptions) | undefined
   ): Promise<ResultSet<T>> {
-    let result: ResultSet<T> | null = null;
-
-    for await (let rs of this.executeStreamed<any>(query, args, options)) {
-      if (result == null) {
-        result = rs;
-      } else {
-        result.cells.push(...rs.cells);
-        result.changes = rs.changes ?? result.changes;
-        result.rowId = rs.rowId ?? result.rowId;
-      }
+    const [{ columns }, , { rows }, { error }] = await this.driver.execute([
+      { prepare: { id: 0, sql: query } },
+      { bind: { id: 0, parameters: args ?? [] } },
+      { step: { id: 0, all: true, bigint: options?.bigint } },
+      { sync: {} }
+    ]);
+    if (error != null) {
+      throw error;
     }
-    return result!;
+
+    const rs: ResultSet<T> = new ResultSetImpl(columns!, rows!);
+
+    if (options?.includeChanges) {
+      const results = await run(
+        this.driver,
+        'select changes(), last_insert_rowid()'
+      );
+      const [[changes, rowid]] = results;
+      rs.changes = changes as number;
+      rs.rowId = rowid as number;
+    }
+    return rs;
   }
 
   async *executeStreamed<T>(
@@ -488,32 +515,39 @@ class ConnectionPoolPreparedQueryImpl<T> implements PreparedQuery<T> {
   }
 
   async *executeStreamed(
+    args?: SqliteArguments,
     options?: StreamedExecuteOptions | undefined
   ): AsyncGenerator<ResultSet<any>, any, unknown> {
     const r = await this.context.reserveConnection();
     try {
       const q = this.cachedQuery(r);
-      yield* q.executeStreamed(options);
+      yield* q.executeStreamed(args, options);
     } finally {
       await r.release();
     }
   }
 
-  async execute(options?: ExecuteOptions | undefined): Promise<ResultSet<T>> {
+  async execute(
+    args?: SqliteArguments,
+    options?: ExecuteOptions | undefined
+  ): Promise<ResultSet<T>> {
     const r = await this.context.reserveConnection();
     try {
       const q = this.cachedQuery(r);
-      return q.execute(options);
+      return q.execute(args, options);
     } finally {
       await r.release();
     }
   }
 
-  async select(options?: QueryOptions | undefined): Promise<T[]> {
+  async select(
+    args?: SqliteArguments,
+    options?: QueryOptions | undefined
+  ): Promise<T[]> {
     const r = await this.context.reserveConnection();
     try {
       const q = this.cachedQuery(r);
-      return q.select(options);
+      return q.select(args, options);
     } finally {
       await r.release();
     }
@@ -578,9 +612,18 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
   }
 
   async *executeStreamed(
+    args?: SqliteArguments,
     options?: StreamedExecuteOptions | undefined
   ): AsyncGenerator<ResultSet<any>, any, unknown> {
     const chunkSize = options?.chunkSize ?? 10;
+    if (args != null) {
+      const [{ error }] = await this.driver.execute([
+        { bind: { id: this.queryId, parameters: args } }
+      ]);
+      if (error != null) {
+        throw error;
+      }
+    }
     try {
       const { columns } = await this.parse();
       while (true) {
@@ -621,9 +664,13 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
     }
   }
 
-  async execute(options?: ExecuteOptions | undefined): Promise<ResultSet<T>> {
+  async execute(
+    args?: SqliteArguments,
+    options?: ExecuteOptions | undefined
+  ): Promise<ResultSet<T>> {
     const { columns } = await this.parse();
-    const [{ rows, skipped }, { error }] = await this.driver.execute([
+    const [, { rows, skipped }, { error }] = await this.driver.execute([
+      { bind: { id: this.queryId, parameters: args } },
       { step: { id: this.queryId, all: true, bigint: options?.bigint } },
       { sync: {} },
       { reset: { id: this.queryId } }
@@ -651,8 +698,11 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
     return rs;
   }
 
-  async select(options?: QueryOptions | undefined): Promise<T[]> {
-    const rs = await this.execute(options);
+  async select(
+    args?: SqliteArguments,
+    options?: QueryOptions | undefined
+  ): Promise<T[]> {
+    const rs = await this.execute(args, options);
     return rs.rows;
   }
 
