@@ -120,9 +120,7 @@ export class ConnectionPoolImpl
   async reserveConnection(
     options?: ReserveConnectionOptions | undefined
   ): Promise<ReservedSqliteConnection> {
-    console.log('driver reserve');
     const con = await this.driver.reserveConnection(options ?? {});
-    console.log('got driver con');
     let wrapped = this.connections.get(con.connection);
     if (wrapped == null) {
       wrapped = new ConnectionImpl(con.connection);

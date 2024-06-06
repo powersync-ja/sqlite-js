@@ -6,9 +6,10 @@
     "strict": true,
     "module": "NodeNext",
     "outDir": "lib",
-    "rootDir": "src",
     "sourceMap": true,
-    "declaration": true
+    "declaration": true,
+    "rootDir": "src"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [{ "path": "../" }]
 }

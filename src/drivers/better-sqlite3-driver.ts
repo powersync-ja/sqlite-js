@@ -44,6 +44,8 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
 
   constructor(path: string, options?: bsqlite.Options) {
     this.con = new DatabaseConstructor(path, options);
+    this.con.exec('PRAGMA journal_mode = WAL');
+    this.con.exec('PRAGMA synchronize = normal');
   }
 
   async close() {
