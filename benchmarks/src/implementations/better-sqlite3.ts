@@ -53,21 +53,6 @@ export class BetterSqlite3Impl extends Benchmark {
     this.db.close();
   }
 
-  async getDbSize(): Promise<number> {
-    const files = await fs.readdir(this.dir);
-    const sqliteFiles = files.filter((file) =>
-      file.toLowerCase().includes('sqlite-async')
-    );
-    let size = 0;
-
-    for (const file of sqliteFiles) {
-      const stats = await fs.stat(join(this.dir, file));
-      size += stats.size;
-    }
-
-    return size;
-  }
-
   // Test 1: 1000 INSERTs
   async test1(): Promise<void> {
     const db = this.db;

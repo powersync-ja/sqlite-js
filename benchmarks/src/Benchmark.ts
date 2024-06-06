@@ -5,6 +5,17 @@ export abstract class Benchmark {
 
   async runAll(): Promise<BenchmarkResults> {
     let results = new BenchmarkResults(this.name);
+    let droppedFrames = 0;
+    let last = performance.now();
+    var timer = setInterval(() => {
+      const now = performance.now();
+      const diff = now - last;
+      last = now;
+      if (diff >= 16) {
+        droppedFrames += Math.floor(diff / 16);
+      }
+    }, 1);
+
     await this.setUp();
 
     await results.record('Test 1: 1000 INSERTs', this.test1.bind(this));
@@ -63,6 +74,15 @@ export abstract class Benchmark {
     await results.record('Test 16: Clear table', this.test16.bind(this));
 
     await this.tearDown();
+
+    clearInterval(timer);
+
+    const diff = performance.now() - last;
+    if (diff >= 16) {
+      droppedFrames += Math.floor(diff / 16);
+    }
+
+    console.log(`Dropped frames: ${droppedFrames} (diff ${diff})`);
     return results;
   }
 

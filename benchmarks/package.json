@@ -7,6 +7,7 @@
   "dependencies": {
     "better-sqlite3": "^11.0.0",
     "prando": "^6.0.1",
+    "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
