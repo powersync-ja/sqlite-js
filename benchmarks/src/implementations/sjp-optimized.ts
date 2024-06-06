@@ -73,17 +73,16 @@ export class JSPOptimizedImpl extends Benchmark {
     await using db = await this.db.reserveConnection();
     await db.transaction(async (tx) => {
       using s = tx.prepare('INSERT INTO t2(a, b, c) VALUES(?, ?, ?)');
-      let promises: Promise<any>[] = [];
+      const pipeline = tx.pipeline();
+
       for (let i = 0; i < 25000; i++) {
         const n = this.random.nextInt(0, 100000);
-        const p = s.execute([i + 1, n, numberName(n)]);
-        promises.push(p);
-        if (promises.length > 100) {
-          await Promise.all(promises);
-          promises = [];
+        pipeline.execute(s, [i + 1, n, numberName(n)]);
+        if (pipeline.count > 100) {
+          await pipeline.flush();
         }
       }
-      await Promise.all(promises);
+      await pipeline.flush();
     });
     await db.execute('PRAGMA wal_checkpoint(RESTART)');
     const total = (
@@ -97,10 +96,15 @@ export class JSPOptimizedImpl extends Benchmark {
     await using db = await this.db.reserveConnection();
     await db.transaction(async (tx) => {
       using s = tx.prepare('INSERT INTO t3(a, b, c) VALUES(?, ?, ?)');
+      const pipeline = tx.pipeline();
       for (let i = 0; i < 25000; i++) {
         const n = this.random.nextInt(0, 100000);
-        await s.execute([i + 1, n, numberName(n)]);
+        pipeline.execute(s, [i + 1, n, numberName(n)]);
+        if (pipeline.count > 100) {
+          await pipeline.flush();
+        }
       }
+      await pipeline.flush();
     });
     await db.execute('PRAGMA wal_checkpoint(RESTART)');
   }
@@ -180,10 +184,15 @@ export class JSPOptimizedImpl extends Benchmark {
     await using db = await this.db.reserveConnection();
     await db.transaction(async (tx) => {
       using s = tx.prepare('UPDATE t3 SET b=? WHERE a=?');
+      const pipeline = tx.pipeline();
       for (let i = 0; i < 25000; i++) {
         const n = this.random.nextInt(0, 100000);
-        await s.execute([n, i + 1]);
+        pipeline.execute(s, [n, i + 1]);
+        if (pipeline.count > 100) {
+          await pipeline.flush();
+        }
       }
+      await pipeline.flush();
     });
     await db.execute('PRAGMA wal_checkpoint(RESTART)');
   }
@@ -193,10 +202,15 @@ export class JSPOptimizedImpl extends Benchmark {
     await using db = await this.db.reserveConnection();
     await db.transaction(async (tx) => {
       using s = tx.prepare('UPDATE t3 SET c=? WHERE a=?');
+      const pipeline = tx.pipeline();
       for (let i = 0; i < 25000; i++) {
         const n = this.random.nextInt(0, 100000);
-        await s.execute([numberName(n), i + 1]);
+        pipeline.execute(s, [numberName(n), i + 1]);
+        if (pipeline.count > 100) {
+          await pipeline.flush();
+        }
       }
+      await pipeline.flush();
     });
     await db.execute('PRAGMA wal_checkpoint(RESTART)');
   }
@@ -237,11 +251,13 @@ export class JSPOptimizedImpl extends Benchmark {
     await using db = await this.db.reserveConnection();
     await db.transaction(async (tx) => {
       using s = tx.prepare('INSERT INTO t1(a, b, c) VALUES(?, ?, ?)');
+      const pipeline = tx.pipeline();
       await tx.execute('DELETE FROM t1');
       for (let i = 0; i < 12000; i++) {
         const n = this.random.nextInt(0, 100000);
-        await s.execute([i + 1, n, numberName(n)]);
+        pipeline.execute(s, [i + 1, n, numberName(n)]);
       }
+      await pipeline.flush();
     });
     await db.execute('PRAGMA wal_checkpoint(RESTART)');
   }

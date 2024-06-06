@@ -4,6 +4,7 @@ import {
   PreparedQuery,
   QueryInterface,
   QueryOptions,
+  QueryPipeline,
   ReserveConnectionOptions,
   ReservedSqliteConnection,
   ResultSet,
@@ -21,6 +22,7 @@ import {
 } from './api.js';
 import { SqliteArguments, SqliteValue } from './common.js';
 import {
+  SqliteCommand,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
   SqlitePrepareResponse
@@ -44,6 +46,10 @@ export class ConnectionPoolImpl
 
   query<T>(sql: string, args?: SqliteArguments): SqliteQuery<T> {
     return new QueryImpl<T>(this, sql, args);
+  }
+
+  pipeline(options?: ReserveConnectionOptions | undefined): QueryPipeline {
+    throw new Error('pipeline not supported here');
   }
 
   async execute<T>(
@@ -159,6 +165,10 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     return this.connection.prepare(sql, args);
   }
 
+  pipeline(options?: ReserveConnectionOptions | undefined): QueryPipeline {
+    return this.connection.pipeline(options);
+  }
+
   transaction<T>(
     callback: (tx: SqliteTransaction) => Promise<T>,
     options?: TransactionOptions | undefined
@@ -271,6 +281,10 @@ export class ConnectionImpl implements SqliteConnection {
 
   query<T>(query: string, args?: SqliteArguments): SqliteQuery<T> {
     return new QueryImpl<T>(this, query, args);
+  }
+
+  pipeline(options?: ReserveConnectionOptions | undefined): QueryPipeline {
+    return new QueryPipelineImpl(this.driver);
   }
 
   async execute<T>(
@@ -391,6 +405,10 @@ export class TransactionImpl implements SqliteTransaction {
 
   query<T>(query: string, args: SqliteArguments): SqliteQuery<T> {
     return new QueryImpl(this, query, args);
+  }
+
+  pipeline(options?: ReserveConnectionOptions | undefined): QueryPipeline {
+    return this.con.pipeline(options);
   }
 
   execute<T>(
@@ -577,7 +595,7 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
   constructor(
     private context: ConnectionImpl,
     private driver: SqliteDriverConnection,
-    private queryId: number,
+    public queryId: number,
     public sql: string,
     public args: SqliteArguments
   ) {
@@ -706,5 +724,44 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
 
   dispose(): void {
     this.driver.execute([{ finalize: { id: this.queryId } }]);
+  }
+}
+
+class QueryPipelineImpl implements QueryPipeline {
+  private buffer: SqliteCommand[] = [];
+
+  constructor(private driver: SqliteDriverConnection) {}
+
+  get count() {
+    return this.buffer.length / 3;
+  }
+
+  execute(query: string | PreparedQuery<any>, args?: SqliteArguments): void {
+    if (typeof query == 'string') {
+      this.buffer.push(
+        { prepare: { id: 0, sql: query } },
+        { bind: { id: 0, parameters: args ?? [] } },
+        { step: { id: 0, all: true } }
+      );
+    } else if (query instanceof ConnectionPreparedQueryImpl) {
+      this.buffer.push(
+        { bind: { id: query.queryId, parameters: args ?? [] } },
+        { step: { id: query.queryId, all: true } },
+        { reset: { id: query.queryId } }
+      );
+    } else {
+      throw new Error('not implemented yet');
+    }
+  }
+
+  async flush(): Promise<void> {
+    this.buffer.push({ sync: {} });
+    const buffer = this.buffer;
+    this.buffer = [];
+    const results = await this.driver.execute(buffer);
+    const result = results[results.length - 1];
+    if (result.error) {
+      throw result.error;
+    }
   }
 }

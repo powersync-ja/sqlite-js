@@ -86,6 +86,8 @@ export interface QueryInterface {
     args?: SqliteArguments,
     options?: QueryOptions & ReserveConnectionOptions
   ): Promise<T[]>;
+
+  pipeline(options?: ReserveConnectionOptions): QueryPipeline;
 }
 
 export interface SqliteConnection extends QueryInterface {
@@ -249,4 +251,18 @@ export interface ExecuteOptions extends QueryOptions {
 export interface StreamedExecuteOptions extends ExecuteOptions {
   /** Size limit in bytes for each chunk */
   chunkSize?: number;
+}
+
+export interface QueryPipeline {
+  /**
+   * Enqueue a query.
+   */
+  execute(query: string | PreparedQuery<any>, args?: SqliteArguments): void;
+
+  /**
+   * Flush all existing queries.
+   */
+  flush(): Promise<void>;
+
+  readonly count: number;
 }
