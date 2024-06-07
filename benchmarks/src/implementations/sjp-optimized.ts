@@ -148,23 +148,28 @@ export class JSPOptimizedImpl extends Benchmark {
 
   // Test 7: 5000 SELECTs with an index
   async test7(): Promise<void> {
-    await this.db.transaction(
-      async (tx) => {
-        using s = tx.prepare<{ count: number; avg: number }>(
-          'SELECT count(*) count, avg(b) avg FROM t3 WHERE b>=? AND b<?'
-        );
-        for (let i = 0; i < 5000; i++) {
-          const row = (await s.select([i * 100, i * 100 + 100]))[0];
-          if (i < 1000) {
-            assert(row.count > 8);
-            assert(row.count < 100);
-          } else {
-            assert(row.count === 0);
+    let promises: Promise<void>[] = [];
+    for (let batch = 0; batch < 10; batch++) {
+      const promise = this.db.transaction(
+        async (tx) => {
+          using s = tx.prepare<{ count: number; avg: number }>(
+            'SELECT count(*) count, avg(b) avg FROM t3 WHERE b>=? AND b<?'
+          );
+          for (let i = batch * 500; i < batch * 500 + 500; i++) {
+            const row = (await s.select([i * 100, i * 100 + 100]))[0];
+            if (i < 1000) {
+              assert(row.count > 8);
+              assert(row.count < 100);
+            } else {
+              assert(row.count === 0);
+            }
           }
-        }
-      },
-      { readonly: true }
-    );
+        },
+        { readonly: true }
+      );
+      promises.push(promise);
+    }
+    await Promise.all(promises);
   }
 
   // Test 8: 1000 UPDATEs without an index

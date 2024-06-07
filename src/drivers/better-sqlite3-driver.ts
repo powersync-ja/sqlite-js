@@ -14,7 +14,8 @@ import {
   SqliteBind,
   SqliteStep,
   SqliteReset,
-  SqliteFinalize
+  SqliteFinalize,
+  SqliteCommandType
 } from '../driver-api.js';
 
 import { ReadWriteConnectionPool } from '../driver-util.js';
@@ -61,12 +62,12 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   }
 
   private prepare(command: SqlitePrepare): SqlitePrepareResponse {
-    const { id, sql } = command.prepare;
+    const { id, sql } = command;
     const statement = this.con.prepare(sql);
     const existing = this.statements.get(id);
     if (existing != null && id == 0) {
       // Overwrite
-      this.finalize({ finalize: { id: id } });
+      this.finalize({ type: SqliteCommandType.finalize, id: id });
     } else if (existing != null) {
       throw new Error(
         `Replacing statement ${id} without finalizing the previous one`
@@ -82,7 +83,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   }
 
   private bind(command: SqliteBind): SqliteCommandResponse {
-    const { id, parameters } = command.bind;
+    const { id, parameters } = command;
     const statement = this.requireStatement(id);
     if (parameters == null) {
       return {};
@@ -105,7 +106,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   }
 
   private step(command: SqliteStep): SqliteStepResponse {
-    const { id, n, all, bigint } = command.step;
+    const { id, n, all, bigint } = command;
     const statement = this.requireStatement(id);
     if (this.statementDone.has(id)) {
       return { skipped: true } as SqliteStepResponse;
@@ -145,7 +146,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   }
 
   private reset(command: SqliteReset): SqliteCommandResponse {
-    const { id, clear_bindings } = command.reset;
+    const { id, clear_bindings } = command;
     const statement = this.requireStatement(id);
     if (this.iterators.has(id)) {
       const iter = this.iterators.get(id)!;
@@ -161,7 +162,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   }
 
   private finalize(command: SqliteFinalize): SqliteCommandResponse {
-    const { id } = command.finalize;
+    const { id } = command;
     this.statements.delete(id);
     this.bindNamed.delete(id);
     this.bindPositional.delete(id);
@@ -175,18 +176,19 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   }
 
   private executeCommand(command: SqliteCommand): SqliteCommandResponse {
-    if ('prepare' in command) {
-      return this.prepare(command);
-    } else if ('bind' in command) {
-      return this.bind(command);
-    } else if ('step' in command) {
-      return this.step(command);
-    } else if ('reset' in command) {
-      return this.reset(command);
-    } else if ('finalize' in command) {
-      return this.finalize(command);
-    } else {
-      throw new Error(`Unknown command: ${Object.keys(command)[0]}`);
+    switch (command.type) {
+      case SqliteCommandType.prepare:
+        return this.prepare(command);
+      case SqliteCommandType.bind:
+        return this.bind(command);
+      case SqliteCommandType.step:
+        return this.step(command);
+      case SqliteCommandType.reset:
+        return this.reset(command);
+      case SqliteCommandType.finalize:
+        return this.finalize(command);
+      default:
+        throw new Error(`Unknown command: ${command.type}`);
     }
   }
 
@@ -197,14 +199,14 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     let results: SqliteCommandResponse[] = [];
 
     for (let command of commands) {
-      if ('sync' in command) {
+      if (command.type == SqliteCommandType.sync) {
         if (this.inError != null) {
           results.push({ error: this.inError });
         } else {
           results.push({});
         }
         if (this.statements.has(0)) {
-          this.executeCommand({ finalize: { id: 0 } });
+          this.finalize({ type: SqliteCommandType.finalize, id: 0 });
         }
         this.inError = null;
       } else if (this.inError) {

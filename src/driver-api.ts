@@ -1,5 +1,14 @@
 import { SqliteArguments, SqliteValue } from './common.js';
 
+export enum SqliteCommandType {
+  prepare = 1,
+  bind = 2,
+  step = 3,
+  reset = 4,
+  finalize = 5,
+  sync = 6
+}
+
 export interface SqliteCommandResponse {
   error?: {
     message: string;
@@ -8,35 +17,36 @@ export interface SqliteCommandResponse {
   skipped?: true;
 }
 
-export interface SqlitePrepare {
-  prepare: {
-    id: number;
-    sql: string;
-  };
+export interface SqliteBaseCommand {
+  type: SqliteCommandType;
+}
+
+export interface SqlitePrepare extends SqliteBaseCommand {
+  type: SqliteCommandType.prepare;
+  id: number;
+  sql: string;
 }
 
 export interface SqlitePrepareResponse extends SqliteCommandResponse {
   columns?: string[];
 }
 
-export interface SqliteBind {
-  bind: {
-    id: number;
-    parameters:
-      | (SqliteValue | undefined)[]
-      | Record<string, SqliteValue>
-      | null
-      | undefined;
-  };
+export interface SqliteBind extends SqliteBaseCommand {
+  type: SqliteCommandType.bind;
+  id: number;
+  parameters:
+    | (SqliteValue | undefined)[]
+    | Record<string, SqliteValue>
+    | null
+    | undefined;
 }
 
-export interface SqliteStep {
-  step: {
-    id: number;
-    n?: number;
-    all?: boolean;
-    bigint?: boolean;
-  };
+export interface SqliteStep extends SqliteBaseCommand {
+  type: SqliteCommandType.step;
+  id: number;
+  n?: number;
+  all?: boolean;
+  bigint?: boolean;
 }
 
 export interface SqliteStepResponse extends SqliteCommandResponse {
@@ -44,21 +54,19 @@ export interface SqliteStepResponse extends SqliteCommandResponse {
   done?: boolean;
 }
 
-export interface SqliteReset {
-  reset: {
-    id: number;
-    clear_bindings?: boolean;
-  };
+export interface SqliteReset extends SqliteBaseCommand {
+  type: SqliteCommandType.reset;
+  id: number;
+  clear_bindings?: boolean;
 }
 
-export interface SqliteFinalize {
-  finalize: {
-    id: number;
-  };
+export interface SqliteFinalize extends SqliteBaseCommand {
+  type: SqliteCommandType.finalize;
+  id: number;
 }
 
 export interface SqliteSync {
-  sync: {};
+  type: SqliteCommandType.sync;
 }
 
 export type SqliteCommand =

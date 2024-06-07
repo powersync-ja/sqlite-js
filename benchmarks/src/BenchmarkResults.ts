@@ -14,6 +14,8 @@ export class BenchmarkResults {
     const elapsed = end - start;
     this.results.push(new BenchmarkResult(name, elapsed));
     console.log(`${name} :: ${Math.round(elapsed)}ms`);
+    // yield the event loop
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
   toString() {

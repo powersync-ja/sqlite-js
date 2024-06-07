@@ -23,6 +23,7 @@ import {
 import { SqliteArguments, SqliteValue } from './common.js';
 import {
   SqliteCommand,
+  SqliteCommandType,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
   SqlitePrepareResponse
@@ -293,10 +294,15 @@ export class ConnectionImpl implements SqliteConnection {
     options?: (ExecuteOptions & ReserveConnectionOptions) | undefined
   ): Promise<ResultSet<T>> {
     const [{ columns }, , { rows }, { error }] = await this.driver.execute([
-      { prepare: { id: 0, sql: query } },
-      { bind: { id: 0, parameters: args ?? [] } },
-      { step: { id: 0, all: true, bigint: options?.bigint } },
-      { sync: {} }
+      { type: SqliteCommandType.prepare, id: 0, sql: query },
+      { type: SqliteCommandType.bind, id: 0, parameters: args ?? [] },
+      {
+        type: SqliteCommandType.step,
+        id: 0,
+        all: true,
+        bigint: options?.bigint
+      },
+      { type: SqliteCommandType.sync }
     ]);
     if (error != null) {
       throw error;
@@ -324,8 +330,8 @@ export class ConnectionImpl implements SqliteConnection {
     try {
       const [{ columns, error }, { error: error2, skipped }] =
         await this.driver.execute([
-          { prepare: { id: 0, sql: query as string } },
-          { bind: { id: 0, parameters: args ?? [] } }
+          { type: SqliteCommandType.prepare, id: 0, sql: query as string },
+          { type: SqliteCommandType.bind, id: 0, parameters: args ?? [] }
         ]);
       if (error != null) {
         throw error;
@@ -340,7 +346,12 @@ export class ConnectionImpl implements SqliteConnection {
 
       while (true) {
         const [{ rows, error, done, skipped }] = await this.driver.execute([
-          { step: { id: 0, n: 10, bigint: options?.bigint } }
+          {
+            type: SqliteCommandType.step,
+            id: 0,
+            n: 10,
+            bigint: options?.bigint
+          }
         ]);
         if (error != null) {
           throw error;
@@ -369,7 +380,7 @@ export class ConnectionImpl implements SqliteConnection {
         yield rs;
       }
     } finally {
-      await this.driver.execute([{ sync: {} }]);
+      await this.driver.execute([{ type: SqliteCommandType.sync }]);
     }
   }
 
@@ -464,10 +475,10 @@ class ResultSetImpl<T> implements ResultSet<T> {
 }
 
 async function run(con: SqliteDriverConnection, sql: string) {
-  const [{ columns }, { rows }, { error }] = (await con.execute([
-    { prepare: { id: 0, sql } },
-    { step: { id: 0, all: true } },
-    { sync: {} }
+  const [, { rows }, { error }] = (await con.execute([
+    { type: SqliteCommandType.prepare, id: 0, sql },
+    { type: SqliteCommandType.step, id: 0, all: true },
+    { type: SqliteCommandType.sync }
   ])) as any[];
   if (error != null) {
     throw error;
@@ -605,9 +616,13 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
 
     this.preparePromise = this.driver
       .execute([
-        { prepare: { id: this.queryId, sql: sql } },
-        { bind: { id: this.queryId, parameters: this.args } },
-        { sync: {} }
+        { type: SqliteCommandType.prepare, id: this.queryId, sql: sql },
+        {
+          type: SqliteCommandType.bind,
+          id: this.queryId,
+          parameters: this.args
+        },
+        { type: SqliteCommandType.sync }
       ])
       .then((r) => {
         if (r[2].error != null) {
@@ -634,7 +649,7 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
     const chunkSize = options?.chunkSize ?? 10;
     if (args != null) {
       const [{ error }] = await this.driver.execute([
-        { bind: { id: this.queryId, parameters: args } }
+        { type: SqliteCommandType.bind, id: this.queryId, parameters: args }
       ]);
       if (error != null) {
         throw error;
@@ -644,7 +659,12 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
       const { columns } = await this.parse();
       while (true) {
         const [{ rows, error, done, skipped }] = await this.driver.execute([
-          { step: { id: this.queryId, n: chunkSize, bigint: options?.bigint } }
+          {
+            type: SqliteCommandType.step,
+            id: this.queryId,
+            n: chunkSize,
+            bigint: options?.bigint
+          }
         ]);
         if (error != null) {
           throw error;
@@ -674,8 +694,8 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
       }
     } finally {
       await this.driver.execute([
-        { sync: {} },
-        { reset: { id: this.queryId } }
+        { type: SqliteCommandType.sync },
+        { type: SqliteCommandType.reset, id: this.queryId }
       ]);
     }
   }
@@ -686,10 +706,15 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
   ): Promise<ResultSet<T>> {
     const { columns } = await this.parse();
     const [, { rows, skipped }, { error }] = await this.driver.execute([
-      { bind: { id: this.queryId, parameters: args } },
-      { step: { id: this.queryId, all: true, bigint: options?.bigint } },
-      { sync: {} },
-      { reset: { id: this.queryId } }
+      { type: SqliteCommandType.bind, id: this.queryId, parameters: args },
+      {
+        type: SqliteCommandType.step,
+        id: this.queryId,
+        all: true,
+        bigint: options?.bigint
+      },
+      { type: SqliteCommandType.sync },
+      { type: SqliteCommandType.reset, id: this.queryId }
     ]);
 
     if (error != null) {
@@ -723,7 +748,9 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
   }
 
   dispose(): void {
-    this.driver.execute([{ finalize: { id: this.queryId } }]);
+    this.driver.execute([
+      { type: SqliteCommandType.finalize, id: this.queryId }
+    ]);
   }
 }
 
@@ -739,15 +766,19 @@ class QueryPipelineImpl implements QueryPipeline {
   execute(query: string | PreparedQuery<any>, args?: SqliteArguments): void {
     if (typeof query == 'string') {
       this.buffer.push(
-        { prepare: { id: 0, sql: query } },
-        { bind: { id: 0, parameters: args ?? [] } },
-        { step: { id: 0, all: true } }
+        { type: SqliteCommandType.prepare, id: 0, sql: query },
+        { type: SqliteCommandType.bind, id: 0, parameters: args ?? [] },
+        { type: SqliteCommandType.step, id: 0, all: true }
       );
     } else if (query instanceof ConnectionPreparedQueryImpl) {
       this.buffer.push(
-        { bind: { id: query.queryId, parameters: args ?? [] } },
-        { step: { id: query.queryId, all: true } },
-        { reset: { id: query.queryId } }
+        {
+          type: SqliteCommandType.bind,
+          id: query.queryId,
+          parameters: args ?? []
+        },
+        { type: SqliteCommandType.step, id: query.queryId, all: true },
+        { type: SqliteCommandType.reset, id: query.queryId }
       );
     } else {
       throw new Error('not implemented yet');
@@ -755,7 +786,7 @@ class QueryPipelineImpl implements QueryPipeline {
   }
 
   async flush(): Promise<void> {
-    this.buffer.push({ sync: {} });
+    this.buffer.push({ type: SqliteCommandType.sync });
     const buffer = this.buffer;
     this.buffer = [];
     const results = await this.driver.execute(buffer);
