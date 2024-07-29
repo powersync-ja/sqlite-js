@@ -1,5 +1,6 @@
 import type * as bsqlite from 'better-sqlite3';
 import DatabaseConstructor from 'better-sqlite3';
+import { createRequire } from 'node:module';
 import * as worker_threads from 'worker_threads';
 import {
   InferBatchResult,
@@ -13,16 +14,17 @@ import {
   SqliteDriverConnectionPool,
   SqliteDriverStatement,
   SqliteParameterBinding,
-  SqliteParseResponse,
   SqliteStepResponse,
   UpdateListener
 } from '../driver-api.js';
-import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 
-import { ReadWriteConnectionPool } from '../driver-util.js';
 import { Deferred } from '../deferred.js';
+import {
+  ReadWriteConnectionPool,
+  SingleConnectionPool
+} from '../driver-util.js';
 
 export function betterSqliteAsyncPool(
   path: string,
@@ -36,13 +38,25 @@ export function betterSqliteAsyncPool(
       });
     }
   });
+  // return new SingleConnectionPool(
+  //   new BetterSqliteAsyncConnection(path, {
+  //     ...poolOptions,
+  //     readonly: false
+  //   })
+  // );
 }
 
 class BetterSqliteAsyncStatement implements SqliteDriverStatement {
+  [Symbol.dispose]: () => void = undefined as any;
+
   constructor(
     private driver: BetterSqliteAsyncConnection,
     private id: number
-  ) {}
+  ) {
+    if (typeof Symbol.dispose != 'undefined') {
+      this[Symbol.dispose] = () => this.finalize();
+    }
+  }
 
   async getColumns(): Promise<string[]> {
     return this.driver
@@ -134,6 +148,7 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
         type: SqliteCommandType.prepare,
         id,
         bigint: options?.bigint,
+        persist: options?.persist,
         sql
       }
     });
@@ -171,12 +186,12 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
     });
     this.worker.postMessage([command, id!, args]);
     const result = await p;
-    if ((result as any)?.error) {
-      console.log('error!', result);
+    const error = (result as any)?.error;
+    if (error != null) {
       return {
         error: new DatabaseConstructor.SqliteError(
-          (result as any).error.stack,
-          (result as any).error.code
+          error.stack ?? error.message,
+          error.code ?? 'ERR'
         )
       } as any;
     }
@@ -188,7 +203,11 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
       return;
     }
     this.closing = true;
-    await this.post('close', {});
+    await this._flush();
+    const r: any = await this.post('close', {});
+    if (r?.error) {
+      throw r.error;
+    }
     await this.worker.terminate();
   }
 

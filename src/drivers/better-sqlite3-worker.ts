@@ -13,8 +13,12 @@ if (port != null) {
       db = new BetterSqliteConnection(args.path);
       port.postMessage({ id });
     } else if (message == 'close') {
-      db?.close();
-      port.postMessage({ id });
+      try {
+        await db!.close();
+        port.postMessage({ id });
+      } catch (e: any) {
+        port.postMessage({ id, value: { error: { message: e.message } } });
+      }
     } else if (message == 'execute') {
       const commands = args;
 

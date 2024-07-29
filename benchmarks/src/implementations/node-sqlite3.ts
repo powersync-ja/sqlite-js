@@ -33,7 +33,7 @@ export class NodeSqlite3Impl extends Benchmark {
     const db = await open({ driver: sqlite3.Database, filename: dbPath });
     this.db = db;
     await db.exec('PRAGMA journal_mode = WAL');
-    await db.exec('PRAGMA synchronize = normal');
+    await db.exec('PRAGMA synchronous = normal');
 
     await db.exec(
       'CREATE TABLE t1(id INTEGER PRIMARY KEY, a INTEGER, b INTEGER, c TEXT)'

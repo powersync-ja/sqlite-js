@@ -149,13 +149,13 @@ export class JSPOptimizedImpl extends Benchmark {
   // Test 7: 5000 SELECTs with an index
   async test7(): Promise<void> {
     let promises: Promise<void>[] = [];
-    for (let batch = 0; batch < 10; batch++) {
+    for (let batch = 0; batch < 5; batch++) {
       const promise = this.db.transaction(
         async (tx) => {
           using s = tx.prepare<{ count: number; avg: number }>(
             'SELECT count(*) count, avg(b) avg FROM t3 WHERE b>=? AND b<?'
           );
-          for (let i = batch * 500; i < batch * 500 + 500; i++) {
+          for (let i = batch * 1000; i < batch * 1000 + 1000; i++) {
             const row = (await s.select([i * 100, i * 100 + 100]))[0];
             if (i < 1000) {
               assert(row.count > 8);

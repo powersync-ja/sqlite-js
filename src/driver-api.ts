@@ -28,6 +28,7 @@ export interface SqlitePrepare extends SqliteBaseCommand {
   id: number;
   sql: string;
   bigint?: boolean;
+  persist?: boolean;
 }
 
 export interface SqliteParseResponse extends SqliteCommandResponse {
@@ -57,8 +58,12 @@ export interface SqliteStep extends SqliteBaseCommand {
   n?: number;
 }
 
+export type SqliteRowRaw = SqliteValue[];
+export type SqliteRowObject = Record<string, SqliteValue>;
+export type SqliteRow = SqliteRowRaw | SqliteRowObject;
+
 export interface SqliteStepResponse extends SqliteCommandResponse {
-  rows?: SqliteValue[][];
+  rows?: SqliteRow[];
   done?: boolean;
 }
 
@@ -101,6 +106,8 @@ export type InferBatchResult<T extends SqliteCommand[]> = {
 
 export interface PrepareOptions {
   bigint?: boolean;
+  rawResults?: boolean;
+  persist?: boolean;
 }
 
 export interface ResetOptions {
@@ -114,8 +121,6 @@ export interface SqliteDriverConnection {
    * Does not return any errors.
    */
   prepare(sql: string, options?: PrepareOptions): SqliteDriverStatement;
-
-  sync(): Promise<void>;
 
   onUpdate(
     listener: UpdateListener,
@@ -132,6 +137,8 @@ export interface SqliteDriverStatement {
   step(n?: number): Promise<SqliteStepResponse>;
   finalize(): void;
   reset(options?: ResetOptions): void;
+
+  [Symbol.dispose](): void;
 }
 
 export interface SqliteDriverConnectionPool {

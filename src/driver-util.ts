@@ -8,6 +8,7 @@ import {
   UpdateListener
 } from './driver-api.js';
 
+import * as os from 'node:os';
 interface QueuedItem {
   reserved: ReservedConnection | null;
   resolve: (reserved: ReservedConnection) => void;
@@ -140,7 +141,7 @@ class MultiConnectionPool implements SqliteDriverConnectionPool {
   private _allConnections = new Set<SqliteDriverConnection>();
   private _availableReadConnections: SqliteDriverConnection[] = [];
   private _queue: QueuedPoolItem[] = [];
-  private _maxConnections: number = 5;
+  private _maxConnections: number = os.cpus().length;
 
   [Symbol.asyncDispose]: () => Promise<void> = undefined as any;
 

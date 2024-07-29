@@ -1,4 +1,5 @@
 import { SqliteArguments, SqliteValue } from './common.js';
+import { SqliteRowObject } from './driver-api.js';
 
 export type SqliteDatabase = SqliteConnectionPool & SqliteConnection;
 
@@ -48,20 +49,23 @@ export interface ReservedSqliteConnection extends SqliteConnection {
 }
 
 export interface QueryInterface {
-  query<T>(
+  query<T extends SqliteRowObject>(
     query: string,
     args?: SqliteArguments,
     options?: ReserveConnectionOptions
   ): SqliteQuery<T>;
 
-  prepare<T>(query: string, args?: SqliteArguments): PreparedQuery<T>;
+  prepare<T extends SqliteRowObject>(
+    query: string,
+    args?: SqliteArguments
+  ): PreparedQuery<T>;
 
   /**
    * Convenience method, same as query(query, args).execute(options).
    *
-   * When called on a connection pool, uses readonly: true by default.
+   * When called on a connection pool, uses readonly: false by default.
    */
-  execute<T>(
+  execute<T extends SqliteRowObject>(
     query: string,
     args?: SqliteArguments,
     options?: ExecuteOptions & ReserveConnectionOptions
@@ -70,7 +74,7 @@ export interface QueryInterface {
   /**
    * Convenience method, same as query(query, args).executeStreamed(options).
    */
-  executeStreamed<T>(
+  executeStreamed<T extends SqliteRowObject>(
     query: string,
     args: SqliteArguments,
     options?: StreamedExecuteOptions & ReserveConnectionOptions
@@ -81,7 +85,7 @@ export interface QueryInterface {
    *
    * When called on a connection pool, uses readonly: true by default.
    */
-  select<T>(
+  select<T extends SqliteRowObject>(
     query: string,
     args?: SqliteArguments,
     options?: QueryOptions & ReserveConnectionOptions
@@ -183,7 +187,7 @@ export interface TransactionOptions {
   type?: 'exclusive' | 'immediate' | 'deferred';
 }
 
-export interface ResultSet<T = any> {
+export interface ResultSet<T extends SqliteRowObject = SqliteRowObject> {
   rowId?: number;
   changes?: number;
 
@@ -196,7 +200,7 @@ export interface ResultSet<T = any> {
   rows: T[];
 }
 
-export interface SqliteQuery<T> {
+export interface SqliteQuery<T extends SqliteRowObject> {
   /**
    * Returns a query that can be used in a transaction.
    */
@@ -214,7 +218,7 @@ export interface SqliteQuery<T> {
   select(options?: QueryOptions): Promise<T[]>;
 }
 
-export interface PreparedQuery<T> {
+export interface PreparedQuery<T extends SqliteRowObject> {
   parse(): Promise<{ columns: string[] }>;
 
   executeStreamed(

@@ -22,11 +22,11 @@ import {
 } from './api.js';
 import { SqliteArguments, SqliteValue } from './common.js';
 import {
-  SqliteCommand,
-  SqliteCommandType,
+  PrepareOptions,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
-  SqliteDriverStatement
+  SqliteDriverStatement,
+  SqliteRowObject
 } from './driver-api.js';
 
 export class ConnectionPoolImpl
@@ -41,11 +41,17 @@ export class ConnectionPoolImpl
     }
   }
 
-  prepare<T>(sql: string, args?: SqliteArguments): PreparedQuery<T> {
+  prepare<T extends SqliteRowObject>(
+    sql: string,
+    args?: SqliteArguments
+  ): PreparedQuery<T> {
     return new ConnectionPoolPreparedQueryImpl<T>(this, sql, args);
   }
 
-  query<T>(sql: string, args?: SqliteArguments): SqliteQuery<T> {
+  query<T extends SqliteRowObject>(
+    sql: string,
+    args?: SqliteArguments
+  ): SqliteQuery<T> {
     return new QueryImpl<T>(this, sql, args);
   }
 
@@ -53,7 +59,7 @@ export class ConnectionPoolImpl
     throw new Error('pipeline not supported here');
   }
 
-  async execute<T>(
+  async execute<T extends SqliteRowObject>(
     query: string,
     args?: SqliteArguments,
     options?: (ExecuteOptions & ReserveConnectionOptions) | undefined
@@ -78,23 +84,20 @@ export class ConnectionPoolImpl
     }
   }
 
-  async *executeStreamed<T>(
+  async *executeStreamed<T extends SqliteRowObject>(
     query: string,
     args?: SqliteArguments,
     options?: (StreamedExecuteOptions & ReserveConnectionOptions) | undefined
   ): AsyncGenerator<ResultSet<T>, any, unknown> {
-    console.log('getting connection');
     const r = await this.reserveConnection(options);
-    console.log('got connection?');
     try {
-      console.log('have con');
       return r.executeStreamed(query, args, options);
     } finally {
       await r.release();
     }
   }
 
-  async select<T>(
+  async select<T extends SqliteRowObject>(
     query: string,
     args?: SqliteArguments | undefined,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
@@ -154,7 +157,7 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     }
   }
 
-  query<T>(
+  query<T extends SqliteRowObject>(
     sql: string,
     args?: SqliteArguments,
     options?: ReserveConnectionOptions | undefined
@@ -162,7 +165,10 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     return new QueryImpl<T>(this, sql, args);
   }
 
-  prepare<T>(sql: string, args?: SqliteArguments): PreparedQuery<T> {
+  prepare<T extends SqliteRowObject>(
+    sql: string,
+    args?: SqliteArguments
+  ): PreparedQuery<T> {
     return this.connection.prepare(sql, args);
   }
 
@@ -198,7 +204,7 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     return this.connection.close();
   }
 
-  execute<T>(
+  execute<T extends SqliteRowObject>(
     query: string,
     args?: SqliteArguments | undefined,
     options?: (ExecuteOptions & ReserveConnectionOptions) | undefined
@@ -206,7 +212,7 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     return this.connection.execute(query, args, options);
   }
 
-  executeStreamed<T>(
+  executeStreamed<T extends SqliteRowObject>(
     query: string,
     args: SqliteArguments | undefined,
     options?: (StreamedExecuteOptions & ReserveConnectionOptions) | undefined
@@ -214,7 +220,7 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     return this.connection.executeStreamed(query, args, options);
   }
 
-  select<T>(
+  select<T extends SqliteRowObject>(
     query: string,
     args?: SqliteArguments | undefined,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
@@ -224,11 +230,9 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
 }
 
 export class ConnectionImpl implements SqliteConnection {
-  private nextPreparedQueryId = 10;
-
-  private begin: PreparedQuery<void> | undefined;
-  private commit: PreparedQuery<void> | undefined;
-  private rollback: PreparedQuery<void> | undefined;
+  private begin: PreparedQuery<{}> | undefined;
+  private commit: PreparedQuery<{}> | undefined;
+  private rollback: PreparedQuery<{}> | undefined;
 
   constructor(private driver: SqliteDriverConnection) {}
 
@@ -236,9 +240,9 @@ export class ConnectionImpl implements SqliteConnection {
     callback: (tx: SqliteTransaction) => Promise<T>,
     options: TransactionOptions
   ): Promise<T> {
-    this.begin ??= this.prepare('BEGIN');
-    this.commit ??= this.prepare('COMMIT');
-    this.rollback ??= this.prepare('ROLLBACK');
+    this.begin ??= this.prepare('BEGIN', undefined, { persist: true });
+    this.commit ??= this.prepare('COMMIT', undefined, { persist: true });
+    this.rollback ??= this.prepare('ROLLBACK', undefined, { persist: true });
 
     await this.begin.execute();
     try {
@@ -271,12 +275,18 @@ export class ConnectionImpl implements SqliteConnection {
     throw new Error('Method not implemented.');
   }
 
-  close(): Promise<void> {
-    throw new Error('Method not implemented.');
+  async close(): Promise<void> {
+    this.begin?.dispose();
+    this.commit?.dispose();
+    this.rollback?.dispose();
   }
 
-  prepare<T>(sql: string, args?: SqliteArguments): PreparedQuery<T> {
-    const statement = this.driver.prepare(sql);
+  prepare<T extends SqliteRowObject>(
+    sql: string,
+    args?: SqliteArguments,
+    options?: PrepareOptions
+  ): PreparedQuery<T> {
+    const statement = this.driver.prepare(sql, options);
     if (args) {
       statement.bind(args);
     }
@@ -289,7 +299,10 @@ export class ConnectionImpl implements SqliteConnection {
     );
   }
 
-  query<T>(query: string, args?: SqliteArguments): SqliteQuery<T> {
+  query<T extends SqliteRowObject>(
+    query: string,
+    args?: SqliteArguments
+  ): SqliteQuery<T> {
     return new QueryImpl<T>(this, query, args);
   }
 
@@ -297,27 +310,22 @@ export class ConnectionImpl implements SqliteConnection {
     return new QueryPipelineImpl(this.driver);
   }
 
-  async execute<T>(
+  async execute<T extends SqliteRowObject>(
     query: string,
     args: SqliteArguments | undefined,
     options?: (ExecuteOptions & ReserveConnectionOptions) | undefined
   ): Promise<ResultSet<T>> {
-    const statement = this.driver.prepare(query, { bigint: options?.bigint });
+    using statement = this.driver.prepare(query, {
+      bigint: options?.bigint,
+      rawResults: false
+    });
     if (args != null) {
       statement.bind(args);
     }
-    const parsePromise = statement.getColumns();
     const stepPromise = statement.step();
-    const syncPromise = this.driver.sync();
-    const [stepResponse, syncResponse, parseResponse] = [
-      await stepPromise,
-      await syncPromise,
-      await parsePromise
-    ];
 
-    const rs: ResultSet<T> = new ResultSetImpl(
-      parseResponse,
-      stepResponse.rows!
+    const rs: ResultSet<T> = new ResultSetImpl<T>(
+      (await stepPromise).rows! as T[]
     );
 
     if (options?.includeChanges) {
@@ -332,49 +340,42 @@ export class ConnectionImpl implements SqliteConnection {
     return rs;
   }
 
-  async *executeStreamed<T>(
+  async *executeStreamed<T extends SqliteRowObject>(
     query: string | PreparedQuery<T>,
     args: SqliteArguments | undefined,
     options?: (StreamedExecuteOptions & ReserveConnectionOptions) | undefined
   ): AsyncGenerator<ResultSet<T>, void, unknown> {
-    try {
-      const statement = this.driver.prepare(query as string, {
-        bigint: options?.bigint
-      });
-      if (args != null) {
-        statement.bind(args);
-      }
-      const parsePromise = statement.getColumns();
-      let columns: string[] | null = null;
+    using statement = this.driver.prepare(query as string, {
+      bigint: options?.bigint
+    });
+    if (args != null) {
+      statement.bind(args);
+    }
 
-      while (true) {
-        const { rows, done } = await statement.step(10);
-        columns ??= await parsePromise;
-        if (rows != null) {
-          yield new ResultSetImpl(columns, rows);
-        }
-        if (done) {
-          break;
-        }
+    while (true) {
+      const { rows, done } = await statement.step(10);
+      if (rows != null) {
+        yield new ResultSetImpl(rows as T[]);
       }
+      if (done) {
+        break;
+      }
+    }
 
-      if (options?.includeChanges) {
-        const results = await run(
-          this.driver,
-          'select changes(), last_insert_rowid()'
-        );
-        const [[changes, rowid]] = results;
-        const rs = new ResultSetImpl<T>(columns!, []);
-        rs.changes = changes as number;
-        rs.rowId = rowid as number;
-        yield rs;
-      }
-    } finally {
-      this.driver.sync();
+    if (options?.includeChanges) {
+      const results = await run(
+        this.driver,
+        'select changes(), last_insert_rowid()'
+      );
+      const [[changes, rowid]] = results;
+      const rs = new ResultSetImpl<T>([]);
+      rs.changes = changes as number;
+      rs.rowId = rowid as number;
+      yield rs;
     }
   }
 
-  async select<T>(
+  async select<T extends SqliteRowObject>(
     query: string,
     args?: SqliteArguments,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
@@ -397,14 +398,20 @@ export class TransactionImpl implements SqliteTransaction {
     await this.select('ROLLBACK');
   }
 
-  prepare<T>(sql: string, args?: SqliteArguments): PreparedQuery<T> {
+  prepare<T extends SqliteRowObject>(
+    sql: string,
+    args?: SqliteArguments
+  ): PreparedQuery<T> {
     const q = this.con.prepare<T>(sql, args);
     // FIXME: auto-dispose these after transaction commit / rollback
     this.preparedQueries.push(q);
     return q;
   }
 
-  query<T>(query: string, args: SqliteArguments): SqliteQuery<T> {
+  query<T extends SqliteRowObject>(
+    query: string,
+    args: SqliteArguments
+  ): SqliteQuery<T> {
     return new QueryImpl(this, query, args);
   }
 
@@ -412,7 +419,7 @@ export class TransactionImpl implements SqliteTransaction {
     return this.con.pipeline(options);
   }
 
-  execute<T>(
+  execute<T extends SqliteRowObject>(
     query: string,
     args: SqliteArguments,
     options?: (ExecuteOptions & ReserveConnectionOptions) | undefined
@@ -420,7 +427,7 @@ export class TransactionImpl implements SqliteTransaction {
     return this.con.execute(query, args, options);
   }
 
-  executeStreamed<T>(
+  executeStreamed<T extends SqliteRowObject>(
     query: string,
     args: SqliteArguments,
     options?: (StreamedExecuteOptions & ReserveConnectionOptions) | undefined
@@ -428,7 +435,7 @@ export class TransactionImpl implements SqliteTransaction {
     return this.con.executeStreamed(query, args, options);
   }
 
-  select<T>(
+  select<T extends SqliteRowObject>(
     query: string,
     args?: SqliteArguments,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
@@ -437,7 +444,7 @@ export class TransactionImpl implements SqliteTransaction {
   }
 }
 
-class ResultSetImpl<T> implements ResultSet<T> {
+class RawResultSetImpl<T extends SqliteRowObject> implements ResultSet<T> {
   columns: (keyof T)[];
   cells: SqliteValue[][];
   private _rowObjects: T[] | undefined;
@@ -464,14 +471,32 @@ class ResultSetImpl<T> implements ResultSet<T> {
   }
 }
 
+class ResultSetImpl<T extends SqliteRowObject> implements ResultSet<T> {
+  rows: T[];
+
+  rowId?: number;
+  changes?: number;
+
+  constructor(rows?: T[]) {
+    this.rows = rows ?? [];
+  }
+
+  get columns(): never {
+    throw new Error('Only available on raw queries');
+  }
+
+  get cells(): never {
+    throw new Error('Only available on raw queries');
+  }
+}
+
 async function run(con: SqliteDriverConnection, sql: string) {
-  const statement = con.prepare(sql);
+  using statement = con.prepare(sql, { rawResults: true });
   const { rows } = await statement.step();
-  con.sync();
   return rows as SqliteValue[][];
 }
 
-class QueryImpl<T> implements SqliteQuery<T> {
+class QueryImpl<T extends SqliteRowObject> implements SqliteQuery<T> {
   constructor(
     private context: QueryInterface,
     public sql: string,
@@ -497,7 +522,9 @@ class QueryImpl<T> implements SqliteQuery<T> {
   }
 }
 
-class ConnectionPoolPreparedQueryImpl<T> implements PreparedQuery<T> {
+class ConnectionPoolPreparedQueryImpl<T extends SqliteRowObject>
+  implements PreparedQuery<T>
+{
   [Symbol.dispose]: () => void = undefined as any;
 
   private byConnection: Map<ConnectionImpl, PreparedQuery<T>> = new Map();
@@ -583,7 +610,9 @@ class ConnectionPoolPreparedQueryImpl<T> implements PreparedQuery<T> {
   }
 }
 
-class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
+class ConnectionPreparedQueryImpl<T extends SqliteRowObject>
+  implements PreparedQuery<T>
+{
   [Symbol.dispose]: () => void = undefined as any;
 
   private columnsPromise: Promise<string[]>;
@@ -620,11 +649,10 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
       this.statement.bind(args);
     }
     try {
-      const columns = await this.columnsPromise;
       while (true) {
         const { rows, done } = await this.statement.step(chunkSize);
         if (rows != null) {
-          yield new ResultSetImpl(columns, rows);
+          yield new ResultSetImpl(rows as T[]);
         }
         if (done) {
           break;
@@ -637,13 +665,12 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
           'select changes(), last_insert_rowid()'
         );
         const [[changes, rowid]] = results;
-        const rs = new ResultSetImpl<T>(columns!, []);
+        const rs = new ResultSetImpl<T>([]);
         rs.changes = changes as number;
         rs.rowId = rowid as number;
         yield rs;
       }
     } finally {
-      this.driver.sync();
       this.statement.reset();
     }
   }
@@ -657,9 +684,8 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
         this.statement.bind(args);
       }
       const { rows } = await this.statement.step();
-      const columns = await this.columnsPromise;
 
-      const rs = new ResultSetImpl<T>(columns, rows);
+      const rs = new ResultSetImpl<T>(rows as T[]);
 
       if (options?.includeChanges) {
         const results = await run(
@@ -667,13 +693,12 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
           'select changes(), last_insert_rowid()'
         );
         const [[changes, rowid]] = results;
-        const rs = new ResultSetImpl<T>(columns!, []);
+        const rs = new ResultSetImpl<T>([]);
         rs.changes = changes as number;
         rs.rowId = rowid as number;
       }
       return rs;
     } finally {
-      this.driver.sync();
       this.statement.reset();
     }
   }
@@ -692,44 +717,31 @@ class ConnectionPreparedQueryImpl<T> implements PreparedQuery<T> {
 }
 
 class QueryPipelineImpl implements QueryPipeline {
-  private buffer: {
-    query: string | PreparedQuery<any>;
-    args?: SqliteArguments;
-  }[] = [];
+  count: number = 0;
+  private lastPromise: Promise<any> | undefined = undefined;
 
   constructor(private driver: SqliteDriverConnection) {}
 
-  get count() {
-    return this.buffer.length;
-  }
-
   execute(query: string | PreparedQuery<any>, args?: SqliteArguments): void {
-    this.buffer.push({ query, args });
+    this.count += 1;
+    if (typeof query == 'string') {
+      using statement = this.driver.prepare(query);
+      if (args) {
+        statement.bind(args);
+      }
+      this.lastPromise = statement.step();
+    } else if (query instanceof ConnectionPreparedQueryImpl) {
+      const statement = query.statement;
+      statement.bind(args ?? []);
+      this.lastPromise = statement.step();
+      statement.reset();
+    } else {
+      throw new Error('not implemented yet');
+    }
   }
 
   async flush(): Promise<void> {
-    const buffer = this.buffer;
-    this.buffer = [];
-    try {
-      for (let { query, args } of buffer) {
-        if (typeof query == 'string') {
-          const statement = this.driver.prepare(query);
-          if (args) {
-            statement.bind(args);
-          }
-          statement.step();
-          statement.finalize();
-        } else if (query instanceof ConnectionPreparedQueryImpl) {
-          const statement = query.statement;
-          statement.bind(args ?? []);
-          statement.step();
-          statement.reset();
-        } else {
-          throw new Error('not implemented yet');
-        }
-      }
-    } finally {
-      await this.driver.sync();
-    }
+    this.count = 0;
+    await this.lastPromise;
   }
 }

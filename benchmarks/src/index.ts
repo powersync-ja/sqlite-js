@@ -6,6 +6,7 @@ import {
 import { Benchmark } from './Benchmark.js';
 import { BenchmarkResults } from './BenchmarkResults.js';
 import { BetterSqlite3Impl } from './implementations/better-sqlite3.js';
+import { NodeSqliteImpl } from './implementations/node-sqlite.js';
 import { NodeSqlite3Impl } from './implementations/node-sqlite3.js';
 import { JSPOptimizedImpl } from './implementations/sjp-optimized.js';
 import { JSPImpl } from './implementations/sjp.js';
@@ -39,7 +40,8 @@ async function main() {
       })
     )
     // await test(new BetterSqlite3Impl('better-sqlite3', dir)),
-    // await test(new NodeSqlite3Impl('node-sqlite3', dir))
+    // await test(new NodeSqlite3Impl('node-sqlite3', dir)),
+    // await test(new NodeSqliteImpl('node:sqlite', dir))
   ];
 
   const first = results[0];

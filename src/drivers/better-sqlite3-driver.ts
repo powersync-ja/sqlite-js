@@ -40,16 +40,25 @@ export function betterSqlitePool(
 }
 
 class BetterSqlitePreparedStatement implements SqliteDriverStatement {
-  private statement: bsqlite.Statement;
+  public statement: bsqlite.Statement;
   private options: PrepareOptions;
   private bindPositional: SqliteValue[] = [];
   private bindNamed: Record<string, SqliteValue> = {};
   private statementDone = false;
   private iterator: Iterator<unknown> | undefined = undefined;
 
+  readonly persisted: boolean;
+
+  [Symbol.dispose]: () => void = undefined as any;
+
   constructor(statement: bsqlite.Statement, options: PrepareOptions) {
     this.statement = statement;
     this.options = options;
+    this.persisted = options.persist ?? false;
+
+    if (typeof Symbol.dispose != 'undefined') {
+      this[Symbol.dispose] = () => this.finalize();
+    }
   }
 
   async getColumns(): Promise<string[]> {
@@ -107,7 +116,9 @@ class BetterSqlitePreparedStatement implements SqliteDriverStatement {
     let iterator = this.iterator;
     const num_rows = n ?? 1;
     if (iterator == null) {
-      statement.raw();
+      if (this.options.rawResults) {
+        statement.raw();
+      }
       if (this.options.bigint) {
         statement.safeIntegers();
       }
@@ -155,16 +166,24 @@ class BetterSqlitePreparedStatement implements SqliteDriverStatement {
 
 export class BetterSqliteConnection implements SqliteDriverConnection {
   con: bsqlite.Database;
-  private statements = new Map<number, BetterSqlitePreparedStatement>();
-  private inError: any = null;
+  statements = new Map<number, BetterSqlitePreparedStatement>();
 
   constructor(path: string, options?: bsqlite.Options) {
     this.con = new DatabaseConstructor(path, options);
     this.con.exec('PRAGMA journal_mode = WAL');
-    this.con.exec('PRAGMA synchronize = normal');
+    this.con.exec('PRAGMA synchronous = normal');
   }
 
   async close() {
+    const remainingStatements = [...this.statements.values()].filter(
+      (s) => !s.persisted
+    );
+    if (remainingStatements.length > 0) {
+      const statement = remainingStatements[0];
+      throw new Error(
+        `${remainingStatements.length} statements not finalized. First: ${statement.statement.source}`
+      );
+    }
     this.con.close();
   }
 
@@ -174,15 +193,6 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   ): BetterSqlitePreparedStatement {
     const statement = this.con.prepare(sql);
     return new BetterSqlitePreparedStatement(statement, options ?? {});
-  }
-
-  async sync(): Promise<void> {
-    let error = this.inError;
-    this.inError = null;
-
-    if (error) {
-      throw error;
-    }
   }
 
   private requireStatement(id: number) {
@@ -195,7 +205,10 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
 
   private _prepare(command: SqlitePrepare): SqliteCommandResponse {
     const { id, sql } = command;
-    const statement = this.prepare(sql, { bigint: command.bigint });
+    const statement = this.prepare(sql, {
+      bigint: command.bigint,
+      persist: command.persist
+    });
     const existing = this.statements.get(id);
     if (existing != null) {
       throw new Error(
@@ -262,29 +275,16 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   async execute<const T extends SqliteCommand[]>(
     commands: T
   ): Promise<InferBatchResult<T>> {
-    // console.log('execute', commands);
     let results: SqliteCommandResponse[] = [];
 
     for (let command of commands) {
-      if (command.type == SqliteCommandType.sync) {
-        if (this.inError != null) {
-          results.push({ error: this.inError });
-        } else {
-          results.push({});
-        }
-        this.inError = null;
-      } else if (this.inError) {
-        results.push({ skipped: true });
-      } else {
-        try {
-          const result = this._executeCommand(command);
-          results.push(result);
-        } catch (e: any) {
-          this.inError = e;
-          results.push({
-            error: { message: e.message, stack: e.stack, code: 'ERR' }
-          });
-        }
+      try {
+        const result = this._executeCommand(command);
+        results.push(result);
+      } catch (e: any) {
+        results.push({
+          error: { message: e.message, stack: e.stack, code: 'ERR' }
+        });
       }
     }
     return results as InferBatchResult<T>;
