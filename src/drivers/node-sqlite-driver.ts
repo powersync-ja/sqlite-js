@@ -1,5 +1,5 @@
-import type * as bsqlite from 'better-sqlite3';
-import DatabaseConstructor from 'better-sqlite3';
+import type * as sqlite from 'node:sqlite';
+
 import { SqliteValue } from '../common.js';
 import {
   SqliteCommandResponse,
@@ -26,22 +26,18 @@ import {
 
 import { ReadWriteConnectionPool } from '../driver-util.js';
 
-export function betterSqlitePool(
-  path: string,
-  poolOptions?: bsqlite.Options
-): SqliteDriverConnectionPool {
+export function nodeSqlitePool(path: string): SqliteDriverConnectionPool {
   return new ReadWriteConnectionPool({
     async openConnection(options) {
-      return new BetterSqliteConnection(path, {
-        ...poolOptions,
-        readonly: (poolOptions?.readonly ?? options?.readonly) || false
-      });
+      const sqlite = await import('node:sqlite');
+      const db = new sqlite.DatabaseSync(path);
+      return new NodeSqliteConnection(db, {});
     }
   });
 }
 
-class BetterSqlitePreparedStatement implements SqliteDriverStatement {
-  public statement: bsqlite.Statement;
+class NodeSqliteSyncStatement implements SqliteDriverStatement {
+  public statement: sqlite.StatementSync;
   private options: PrepareOptions;
   private bindPositional: SqliteValue[] = [];
   private bindNamed: Record<string, SqliteValue> = {};
@@ -52,7 +48,7 @@ class BetterSqlitePreparedStatement implements SqliteDriverStatement {
 
   [Symbol.dispose]: () => void = undefined as any;
 
-  constructor(statement: bsqlite.Statement, options: PrepareOptions) {
+  constructor(statement: sqlite.StatementSync, options: PrepareOptions) {
     this.statement = statement;
     this.options = options;
     this.persisted = options.persist ?? false;
@@ -67,13 +63,8 @@ class BetterSqlitePreparedStatement implements SqliteDriverStatement {
   }
 
   getColumnsSync(): string[] {
-    const existing = this.statement;
-    if (existing.reader) {
-      const columns = existing.columns().map((c) => c.name);
-      return columns;
-    } else {
-      return [];
-    }
+    // Not supported
+    return [];
   }
 
   bind(parameters: SqliteParameterBinding): void {
@@ -107,29 +98,22 @@ class BetterSqlitePreparedStatement implements SqliteDriverStatement {
     }
 
     if (options?.requireTransaction) {
-      if (!this.statement.database.inTransaction) {
-        throw new Error('Transaction has been rolled back');
-      }
+      // TODO: implement
     }
 
     const bindNamed = this.bindNamed;
     const bindPositional = this.bindPositional;
-    const bind = [bindPositional, bindNamed].filter((b) => b != null);
-    if (!statement.reader) {
-      statement.run(...bind);
-      this.statementDone = true;
-      return { rows: [], done: true } as SqliteStepResponse;
-    }
+
     let iterator = this.iterator;
     const num_rows = n ?? 1;
     if (iterator == null) {
       if (this.options.rawResults) {
-        statement.raw();
+        // Not supported
       }
       if (this.options.bigint) {
-        statement.safeIntegers();
+        statement.setReadBigInts(true);
       }
-      iterator = statement.iterate(...bind);
+      iterator = statement.all(bindNamed, ...bindPositional)[Symbol.iterator]();
       this.iterator = iterator;
     }
     let rows = [];
@@ -171,12 +155,12 @@ class BetterSqlitePreparedStatement implements SqliteDriverStatement {
   }
 }
 
-export class BetterSqliteConnection implements SqliteDriverConnection {
-  con: bsqlite.Database;
-  statements = new Map<number, BetterSqlitePreparedStatement>();
+export class NodeSqliteConnection implements SqliteDriverConnection {
+  con: sqlite.DatabaseSync;
+  statements = new Map<number, NodeSqliteSyncStatement>();
 
-  constructor(path: string, options?: bsqlite.Options) {
-    this.con = new DatabaseConstructor(path, options);
+  constructor(db: sqlite.DatabaseSync, options: any) {
+    this.con = db;
     this.con.exec('PRAGMA journal_mode = WAL');
     this.con.exec('PRAGMA synchronous = normal');
   }
@@ -188,18 +172,15 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     if (remainingStatements.length > 0) {
       const statement = remainingStatements[0];
       throw new Error(
-        `${remainingStatements.length} statements not finalized. First: ${statement.statement.source}`
+        `${remainingStatements.length} statements not finalized. First: ${statement.statement.sourceSQL}`
       );
     }
     this.con.close();
   }
 
-  prepare(
-    sql: string,
-    options?: PrepareOptions
-  ): BetterSqlitePreparedStatement {
+  prepare(sql: string, options?: PrepareOptions): NodeSqliteSyncStatement {
     const statement = this.con.prepare(sql);
-    return new BetterSqlitePreparedStatement(statement, options ?? {});
+    return new NodeSqliteSyncStatement(statement, options ?? {});
   }
 
   private requireStatement(id: number) {
@@ -320,9 +301,9 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     // 1. The table needs to exist before registering the listener.
     // 2. Deleting and re-creating the same will dereigster the listener for that table.
 
-    this.con.function('_logger', function (table: any, type: any, rowid: any) {
-      listener({ events: [{ table, rowId: rowid, type }] });
-    });
+    // this.con.function('_logger', function (table: any, type: any, rowid: any) {
+    //   listener({ events: [{ table, rowId: rowid, type }] });
+    // });
     let tables = options?.tables;
     if (tables == null) {
       tables = this.con

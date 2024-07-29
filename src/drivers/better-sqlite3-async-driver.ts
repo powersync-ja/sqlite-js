@@ -151,6 +151,7 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
         id,
         bigint: options?.bigint,
         persist: options?.persist,
+        rawResults: options?.rawResults,
         sql
       }
     });

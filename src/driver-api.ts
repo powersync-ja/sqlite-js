@@ -29,6 +29,7 @@ export interface SqlitePrepare extends SqliteBaseCommand {
   sql: string;
   bigint?: boolean;
   persist?: boolean;
+  rawResults?: boolean;
 }
 
 export interface SqliteParseResponse extends SqliteCommandResponse {
@@ -182,6 +183,9 @@ export interface UpdateEvent {
 export interface ReservedConnection {
   /** Direct handle to the underlying connection. */
   connection: SqliteDriverConnection;
+
+  /** Proxied to the underlying connection */
+  prepare(sql: string, options?: PrepareOptions): SqliteDriverStatement;
 
   release(): Promise<void>;
   [Symbol.asyncDispose](): Promise<void>;

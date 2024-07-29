@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "test": "vitest",
+    "test": "tsc -p ./test/tsconfig.json && mocha",
     "format": "prettier . --write",
     "build": "tsc -b"
   },
@@ -13,12 +13,16 @@
   "main": "./lib/index.js",
   "module": "./lib/index.js",
   "devDependencies": {
-    "@types/node": "^20.14.2",
     "@types/better-sqlite3": "^7.6.9",
+    "@types/chai": "^4.3.16",
     "@types/mocha": "^10.0.6",
-    "chai": "^5.1.0",
+    "@types/node": "^20.14.2",
+    "chai": "^4.0.0",
+    "cross-env": "^7.0.3",
     "mocha": "^10.4.0",
     "prettier": "^3.2.5",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.16.2",
     "typescript": "^5.4.5",
     "vitest": "^1.5.0"
   }

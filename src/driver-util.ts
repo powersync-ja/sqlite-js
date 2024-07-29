@@ -1,10 +1,12 @@
 import {
   InferBatchResult,
+  PrepareOptions,
   ReserveConnectionOptions,
   ReservedConnection,
   SqliteCommand,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
+  SqliteDriverStatement,
   UpdateListener
 } from './driver-api.js';
 
@@ -121,6 +123,11 @@ class ReservedConnectionImpl implements ReservedConnection {
     if (typeof Symbol.asyncDispose != 'undefined') {
       this[Symbol.asyncDispose] = release;
     }
+  }
+
+  /** Proxied to the underlying connection */
+  prepare(sql: string, options?: PrepareOptions): SqliteDriverStatement {
+    return this.connection.prepare(sql, options);
   }
 
   onUpdate(
