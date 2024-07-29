@@ -74,13 +74,10 @@ export class JSPImpl extends Benchmark {
   async test2(): Promise<void> {
     await using db = await this.db.reserveConnection();
     await db.transaction(async (tx) => {
+      using s = tx.prepare('INSERT INTO t2(a, b, c) VALUES(?, ?, ?)');
       for (let i = 0; i < 25000; i++) {
         const n = this.random.nextInt(0, 100000);
-        await tx.execute('INSERT INTO t2(a, b, c) VALUES(?, ?, ?)', [
-          i + 1,
-          n,
-          numberName(n)
-        ]);
+        await s.execute([i + 1, n, numberName(n)]);
       }
     });
     await db.execute('PRAGMA wal_checkpoint(RESTART)');

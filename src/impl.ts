@@ -102,7 +102,7 @@ export class ConnectionPoolImpl
     args?: SqliteArguments | undefined,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
   ): Promise<T[]> {
-    const r = await this.reserveConnection({ readonly: true });
+    const r = await this.reserveConnection({ readonly: true, ...options });
     try {
       return r.select(query, args, options);
     } finally {
