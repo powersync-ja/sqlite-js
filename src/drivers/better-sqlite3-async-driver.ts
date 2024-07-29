@@ -3,9 +3,18 @@ import DatabaseConstructor from 'better-sqlite3';
 import * as worker_threads from 'worker_threads';
 import {
   InferBatchResult,
+  InferCommandResult,
+  PrepareOptions,
+  ResetOptions,
   SqliteCommand,
+  SqliteCommandResponse,
+  SqliteCommandType,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
+  SqliteDriverStatement,
+  SqliteParameterBinding,
+  SqliteParseResponse,
+  SqliteStepResponse,
   UpdateListener
 } from '../driver-api.js';
 import { createRequire } from 'node:module';
@@ -13,6 +22,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
 import { ReadWriteConnectionPool } from '../driver-util.js';
+import { Deferred } from '../deferred.js';
 
 export function betterSqliteAsyncPool(
   path: string,
@@ -28,12 +38,68 @@ export function betterSqliteAsyncPool(
   });
 }
 
+class BetterSqliteAsyncStatement implements SqliteDriverStatement {
+  constructor(
+    private driver: BetterSqliteAsyncConnection,
+    private id: number
+  ) {}
+
+  async getColumns(): Promise<string[]> {
+    return this.driver
+      ._push({
+        type: SqliteCommandType.parse,
+        id: this.id
+      })
+      .then((r) => r.columns);
+  }
+
+  bind(parameters: SqliteParameterBinding): void {
+    this.driver._send({
+      type: SqliteCommandType.bind,
+      id: this.id,
+      parameters: parameters
+    });
+  }
+
+  async step(n?: number): Promise<SqliteStepResponse> {
+    return this.driver._push({
+      type: SqliteCommandType.step,
+      id: this.id,
+      n: n
+    });
+  }
+
+  finalize(): void {
+    this.driver._send({
+      type: SqliteCommandType.finalize,
+      id: this.id
+    });
+  }
+
+  reset(options?: ResetOptions): void {
+    this.driver._send({
+      type: SqliteCommandType.reset,
+      id: this.id,
+      clear_bindings: options?.clear_bindings
+    });
+  }
+}
+
+interface CommandQueueItem {
+  cmd: SqliteCommand;
+  resolve?: (r: SqliteCommandResponse) => void;
+  reject?: (e: any) => void;
+}
+
 export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
   worker: worker_threads.Worker;
   private callbacks = new Map<number, (value: any) => void>();
   private nextCallbackId = 1;
   private ready: Promise<void>;
   private closing = false;
+  private nextId = 1;
+
+  buffer: CommandQueueItem[] = [];
 
   constructor(path: string, options?: bsqlite.Options) {
     const worker = new worker_threads.Worker(
@@ -61,6 +127,36 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
     this.worker = worker;
   }
 
+  prepare(sql: string, options?: PrepareOptions): BetterSqliteAsyncStatement {
+    const id = this.nextId++;
+    this.buffer.push({
+      cmd: {
+        type: SqliteCommandType.prepare,
+        id,
+        bigint: options?.bigint,
+        sql
+      }
+    });
+    return new BetterSqliteAsyncStatement(this, id);
+  }
+
+  async sync(): Promise<void> {
+    await this._push({
+      type: SqliteCommandType.sync
+    });
+  }
+
+  _push<T extends SqliteCommand>(cmd: T): Promise<InferCommandResult<T>> {
+    const d = new Deferred<SqliteCommandResponse>();
+    this.buffer.push({ cmd, resolve: d.resolve, reject: d.reject });
+    this._maybeFlush();
+    return d.promise as Promise<InferCommandResult<T>>;
+  }
+
+  _send(cmd: SqliteCommand): void {
+    this.buffer.push({ cmd });
+  }
+
   private registerCallback(callback: (value: any) => void) {
     const id = this.nextCallbackId++;
     this.callbacks.set(id, callback);
@@ -76,10 +172,11 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
     this.worker.postMessage([command, id!, args]);
     const result = await p;
     if ((result as any)?.error) {
+      console.log('error!', result);
       return {
         error: new DatabaseConstructor.SqliteError(
-          (result as any).error.message,
-          (result as any).code
+          (result as any).error.stack,
+          (result as any).error.code
         )
       } as any;
     }
@@ -95,7 +192,40 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
     await this.worker.terminate();
   }
 
-  async execute<const T extends SqliteCommand[]>(
+  private inProgress = 0;
+
+  async _flush() {
+    const commands = this.buffer;
+    if (commands.length == 0) {
+      return;
+    }
+    this.buffer = [];
+    const r = await this._execute(commands.map((c) => c.cmd));
+    for (let i = 0; i < commands.length; i++) {
+      const c = commands[i];
+      const rr = r[i];
+      if (rr.error) {
+        c.reject?.(rr.error);
+      } else if (c.resolve) {
+        c.resolve!(rr);
+      }
+    }
+  }
+
+  async _maybeFlush() {
+    if (this.inProgress <= 2) {
+      this.inProgress += 1;
+      try {
+        while (this.buffer.length > 0) {
+          await this._flush();
+        }
+      } finally {
+        this.inProgress -= 1;
+      }
+    }
+  }
+
+  async _execute<const T extends SqliteCommand[]>(
     commands: T
   ): Promise<InferBatchResult<T>> {
     return await this.post('execute', commands);

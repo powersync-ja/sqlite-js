@@ -122,12 +122,6 @@ class ReservedConnectionImpl implements ReservedConnection {
     }
   }
 
-  execute<const T extends SqliteCommand[]>(
-    commands: T
-  ): Promise<InferBatchResult<T>> {
-    return this.connection.execute(commands);
-  }
-
   onUpdate(
     listener: UpdateListener,
     options?:

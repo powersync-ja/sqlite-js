@@ -6,13 +6,15 @@ export enum SqliteCommandType {
   step = 3,
   reset = 4,
   finalize = 5,
-  sync = 6
+  sync = 6,
+  parse = 7
 }
 
 export interface SqliteCommandResponse {
   error?: {
     message: string;
     code: string;
+    stack?: string;
   };
   skipped?: true;
 }
@@ -25,28 +27,34 @@ export interface SqlitePrepare extends SqliteBaseCommand {
   type: SqliteCommandType.prepare;
   id: number;
   sql: string;
+  bigint?: boolean;
 }
 
-export interface SqlitePrepareResponse extends SqliteCommandResponse {
-  columns?: string[];
+export interface SqliteParseResponse extends SqliteCommandResponse {
+  columns: string[];
 }
+
+export type SqliteParameterBinding =
+  | (SqliteValue | undefined)[]
+  | Record<string, SqliteValue>
+  | null
+  | undefined;
 
 export interface SqliteBind extends SqliteBaseCommand {
   type: SqliteCommandType.bind;
   id: number;
-  parameters:
-    | (SqliteValue | undefined)[]
-    | Record<string, SqliteValue>
-    | null
-    | undefined;
+  parameters: SqliteParameterBinding;
+}
+
+export interface SqliteParse extends SqliteBaseCommand {
+  type: SqliteCommandType.parse;
+  id: number;
 }
 
 export interface SqliteStep extends SqliteBaseCommand {
   type: SqliteCommandType.step;
   id: number;
   n?: number;
-  all?: boolean;
-  bigint?: boolean;
 }
 
 export interface SqliteStepResponse extends SqliteCommandResponse {
@@ -75,23 +83,39 @@ export type SqliteCommand =
   | SqliteStep
   | SqliteReset
   | SqliteFinalize
-  | SqliteSync;
+  | SqliteSync
+  | SqliteParse;
 
 export type InferCommandResult<T extends SqliteCommand> =
   T extends SqlitePrepare
-    ? SqlitePrepareResponse
+    ? SqliteCommandResponse
     : T extends SqliteStep
       ? SqliteStepResponse
-      : SqliteCommandResponse;
+      : T extends SqliteParse
+        ? SqliteParseResponse
+        : SqliteCommandResponse;
 
 export type InferBatchResult<T extends SqliteCommand[]> = {
   [i in keyof T]: InferCommandResult<T[i]>;
 };
 
+export interface PrepareOptions {
+  bigint?: boolean;
+}
+
+export interface ResetOptions {
+  clear_bindings?: boolean;
+}
+
 export interface SqliteDriverConnection {
-  execute<const T extends SqliteCommand[]>(
-    commands: T
-  ): Promise<InferBatchResult<T>>;
+  /**
+   * Prepare a statement.
+   *
+   * Does not return any errors.
+   */
+  prepare(sql: string, options?: PrepareOptions): SqliteDriverStatement;
+
+  sync(): Promise<void>;
 
   onUpdate(
     listener: UpdateListener,
@@ -99,6 +123,15 @@ export interface SqliteDriverConnection {
   ): () => void;
 
   close(): Promise<void>;
+}
+
+export interface SqliteDriverStatement {
+  getColumns(): Promise<string[]>;
+
+  bind(parameters: SqliteParameterBinding): void;
+  step(n?: number): Promise<SqliteStepResponse>;
+  finalize(): void;
+  reset(options?: ResetOptions): void;
 }
 
 export interface SqliteDriverConnectionPool {
@@ -134,7 +167,7 @@ export interface UpdateEvent {
   rowId: bigint;
 }
 
-export interface ReservedConnection extends SqliteDriverConnection {
+export interface ReservedConnection {
   /** Direct handle to the underlying connection. */
   connection: SqliteDriverConnection;
 

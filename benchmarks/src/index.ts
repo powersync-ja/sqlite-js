@@ -37,9 +37,9 @@ async function main() {
         const db = new ConnectionPoolImpl(betterSqliteAsyncPool(path));
         return db;
       })
-    ),
-    await test(new BetterSqlite3Impl('better-sqlite3', dir)),
-    await test(new NodeSqlite3Impl('node-sqlite3', dir))
+    )
+    // await test(new BetterSqlite3Impl('better-sqlite3', dir)),
+    // await test(new NodeSqlite3Impl('node-sqlite3', dir))
   ];
 
   const first = results[0];
