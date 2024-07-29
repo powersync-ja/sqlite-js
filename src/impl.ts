@@ -729,11 +729,15 @@ class QueryPipelineImpl implements QueryPipeline {
       if (args) {
         statement.bind(args);
       }
-      this.lastPromise = statement.step();
+      this.lastPromise = statement.step(undefined, {
+        requireTransaction: true
+      });
     } else if (query instanceof ConnectionPreparedQueryImpl) {
       const statement = query.statement;
       statement.bind(args ?? []);
-      this.lastPromise = statement.step();
+      this.lastPromise = statement.step(undefined, {
+        requireTransaction: true
+      });
       statement.reset();
     } else {
       throw new Error('not implemented yet');

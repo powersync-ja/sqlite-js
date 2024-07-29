@@ -56,6 +56,7 @@ export interface SqliteStep extends SqliteBaseCommand {
   type: SqliteCommandType.step;
   id: number;
   n?: number;
+  requireTransaction?: boolean;
 }
 
 export type SqliteRowRaw = SqliteValue[];
@@ -134,11 +135,15 @@ export interface SqliteDriverStatement {
   getColumns(): Promise<string[]>;
 
   bind(parameters: SqliteParameterBinding): void;
-  step(n?: number): Promise<SqliteStepResponse>;
+  step(n?: number, options?: StepOptions): Promise<SqliteStepResponse>;
   finalize(): void;
   reset(options?: ResetOptions): void;
 
   [Symbol.dispose](): void;
+}
+
+export interface StepOptions {
+  requireTransaction?: boolean;
 }
 
 export interface SqliteDriverConnectionPool {

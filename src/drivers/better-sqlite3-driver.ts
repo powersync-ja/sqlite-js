@@ -20,7 +20,8 @@ import {
   SqliteParameterBinding,
   SqliteParseResponse,
   SqliteParse,
-  SqliteDriverStatement
+  SqliteDriverStatement,
+  StepOptions
 } from '../driver-api.js';
 
 import { ReadWriteConnectionPool } from '../driver-util.js';
@@ -93,16 +94,22 @@ class BetterSqlitePreparedStatement implements SqliteDriverStatement {
     }
   }
 
-  async step(n?: number): Promise<SqliteStepResponse> {
-    return this.stepSync(n);
+  async step(n?: number, options?: StepOptions): Promise<SqliteStepResponse> {
+    return this.stepSync(n, options);
   }
 
-  stepSync(n?: number): SqliteStepResponse {
+  stepSync(n?: number, options?: StepOptions): SqliteStepResponse {
     const all = n == null;
 
     const statement = this.statement;
     if (this.statementDone) {
       return { skipped: true } as SqliteStepResponse;
+    }
+
+    if (options?.requireTransaction) {
+      if (!this.statement.database.inTransaction) {
+        throw new Error('Transaction has been rolled back');
+      }
     }
 
     const bindNamed = this.bindNamed;
@@ -233,9 +240,9 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   }
 
   private _step(command: SqliteStep): SqliteStepResponse {
-    const { id, n } = command;
+    const { id, n, requireTransaction } = command;
     const statement = this.requireStatement(id);
-    return statement.stepSync(n);
+    return statement.stepSync(n, { requireTransaction });
   }
 
   private _reset(command: SqliteReset): SqliteCommandResponse {

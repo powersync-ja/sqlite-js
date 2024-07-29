@@ -15,6 +15,7 @@ import {
   SqliteDriverStatement,
   SqliteParameterBinding,
   SqliteStepResponse,
+  StepOptions,
   UpdateListener
 } from '../driver-api.js';
 
@@ -75,11 +76,12 @@ class BetterSqliteAsyncStatement implements SqliteDriverStatement {
     });
   }
 
-  async step(n?: number): Promise<SqliteStepResponse> {
+  async step(n?: number, options?: StepOptions): Promise<SqliteStepResponse> {
     return this.driver._push({
       type: SqliteCommandType.step,
       id: this.id,
-      n: n
+      n: n,
+      requireTransaction: options?.requireTransaction
     });
   }
 
