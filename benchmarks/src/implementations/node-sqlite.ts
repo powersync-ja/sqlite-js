@@ -1,9 +1,8 @@
-import { Benchmark } from '../Benchmark.js';
-import { join } from 'path';
 import { promises as fs } from 'fs';
-import { SqliteConnectionPool, SqliteConnection } from '../../../lib/index.js';
-import Prando from 'prando';
 import assert from 'node:assert';
+import { join } from 'path';
+import Prando from 'prando';
+import { Benchmark } from '../Benchmark.js';
 import { numberName } from '../util.js';
 
 import * as sqlite from 'node:sqlite';
