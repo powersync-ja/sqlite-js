@@ -121,6 +121,15 @@ export function describeDriverTests(
       expect(rows).toEqual([{ one: 1, two: 2 }]);
     });
 
+    test('bind named args - explicit names', async () => {
+      await using driver = await open();
+      await using connection = await driver.reserveConnection();
+      using s = connection.prepare('select $one as one, $two as two');
+      s.bind({ $one: 1, $two: 2 });
+      const { rows } = await s.step();
+      expect(rows).toEqual([{ one: 1, two: 2 }]);
+    });
+
     test.skipIf(!features.allowsMissingParameters)(
       'skip named arg',
       async () => {

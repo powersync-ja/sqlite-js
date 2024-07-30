@@ -148,8 +148,16 @@ class BetterSqlitePreparedStatement implements InternalStatement {
         }
       }
     } else {
-      let previous = this.bindNamed;
-      this.bindNamed = { ...previous, ...parameters };
+      for (let key in parameters) {
+        const value = parameters[key];
+        let name = key;
+        const prefix = key[0];
+        // better-sqlite doesn't support the explicit prefix - strip it
+        if (prefix == ':' || prefix == '?' || prefix == '$' || prefix == '@') {
+          name = key.substring(1);
+        }
+        this.bindNamed[name] = value;
+      }
     }
   }
 
