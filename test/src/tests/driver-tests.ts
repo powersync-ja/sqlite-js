@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { beforeEach, describe, test } from 'mocha';
-import { expect } from 'chai';
+import { beforeEach, describe, test } from './test.js';
+import { expect } from 'expect';
 import { SqliteDriverConnectionPool } from '../../../lib/driver-api.js';
 
 export function describeDriverTests(
@@ -23,10 +23,11 @@ export function describeDriverTests(
       return db;
     };
 
-    beforeEach(function () {
-      const testNameSanitized = this.currentTest
-        ?.fullTitle()
-        .replaceAll(/[\s\/\\>\.\-\:]+/g, '_');
+    beforeEach((context) => {
+      const testNameSanitized = context.fullName.replaceAll(
+        /[\s\/\\>\.\-\:]+/g,
+        '_'
+      );
       dbPath = `test-db/${testNameSanitized}.db`;
     });
 
@@ -39,8 +40,8 @@ export function describeDriverTests(
       const { rows } = await s.step();
       const columns = await s.getColumns();
 
-      expect(columns).deep.equals(['one']);
-      expect(rows).deep.equals([[1]]);
+      expect(columns).toEqual(['one']);
+      expect(rows).toEqual([[1]]);
     });
 
     test('big number', async () => {
@@ -49,13 +50,13 @@ export function describeDriverTests(
       using s = connection.prepare('select 9223372036854775807 as bignumber');
       const { rows } = await s.step();
 
-      expect(rows).deep.equals([{ bignumber: 9223372036854776000 }]);
+      expect(rows).toEqual([{ bignumber: 9223372036854776000 }]);
 
       using s2 = connection.prepare('select ? as bignumber');
       s2.bind([9223372036854775807n]);
       const { rows: rows2 } = await s2.step();
 
-      expect(rows2).deep.equals([{ bignumber: 9223372036854776000 }]);
+      expect(rows2).toEqual([{ bignumber: 9223372036854776000 }]);
     });
 
     test('bigint', async () => {
@@ -64,13 +65,13 @@ export function describeDriverTests(
       using s = connection.prepare('select ? as bignumber', { bigint: true });
       s.bind([9223372036854775807n]);
       const { rows: rows1 } = await s.step();
-      expect(rows1).deep.equals([{ bignumber: 9223372036854775807n }]);
+      expect(rows1).toEqual([{ bignumber: 9223372036854775807n }]);
 
       using s2 = connection.prepare('select 9223372036854775807 as bignumber', {
         bigint: true
       });
       const { rows: rows2 } = await s2.step();
-      expect(rows2).deep.equals([{ bignumber: 9223372036854775807n }]);
+      expect(rows2).toEqual([{ bignumber: 9223372036854775807n }]);
     });
 
     test('insert returning', async () => {
@@ -86,8 +87,8 @@ export function describeDriverTests(
       const columns = await s2.getColumns();
       const { rows } = await s2.step();
 
-      expect(columns).deep.equals(['id']);
-      expect(rows).deep.equals([{ id: 1 }]);
+      expect(columns).toEqual(['id']);
+      expect(rows).toEqual([{ id: 1 }]);
     });
 
     test('bind named args', async () => {
@@ -96,7 +97,7 @@ export function describeDriverTests(
       using s = await connection.prepare('select :one as one, :two as two');
       s.bind({ one: 1, two: 2 });
       const { rows } = await s.step();
-      expect(rows).deep.equals([{ one: 1, two: 2 }]);
+      expect(rows).toEqual([{ one: 1, two: 2 }]);
     });
 
     test.skip('skip named arg', async () => {

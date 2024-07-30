@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { beforeEach, describe, test } from 'mocha';
-import { expect } from 'chai';
+import { beforeEach, describe, test } from './test.js';
+import { expect } from 'expect';
 import { ConnectionPoolImpl } from '../../../lib/impl.js';
 
 export function describeImplTests(
@@ -22,10 +22,11 @@ export function describeImplTests(
       return factory(dbPath);
     };
 
-    beforeEach(function () {
-      const testNameSanitized = this.currentTest
-        ?.fullTitle()
-        .replaceAll(/[\s\/\\>\.\-]+/g, '_');
+    beforeEach((context) => {
+      const testNameSanitized = context.fullName.replaceAll(
+        /[\s\/\\>\.\-]+/g,
+        '_'
+      );
       dbPath = `test-db/${testNameSanitized}.db`;
     });
 
