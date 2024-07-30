@@ -1,18 +1,18 @@
-import { BetterSqliteConnection } from './better-sqlite3-driver.js';
-
+import * as sqlite from 'node:sqlite';
 import * as worker_threads from 'worker_threads';
+import { NodeSqliteConnection } from './node-sqlite-driver.js';
 import { mapError } from './util.js';
 import { SqliteDriverError } from '../driver-api.js';
 
 const port = worker_threads.parentPort;
 if (port != null) {
-  let db: BetterSqliteConnection | null = null;
+  let db: NodeSqliteConnection | null = null;
 
   port.addListener('message', async (value) => {
     const [message, id, args] = value;
 
     if (message == 'open') {
-      db = new BetterSqliteConnection(args.path);
+      db = new NodeSqliteConnection(new sqlite.DatabaseSync(args.path), {});
       port.postMessage({ id });
     } else if (message == 'close') {
       try {

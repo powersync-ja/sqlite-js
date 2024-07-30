@@ -337,8 +337,9 @@ export class NodeSqliteConnection implements SqliteDriverConnection {
         const result = this._executeCommand(command);
         results.push(result);
       } catch (e: any) {
+        const err = mapError(e);
         results.push({
-          error: { message: e.message, stack: e.stack, code: 'ERR' }
+          error: { message: err.message, stack: err.stack, code: err.code }
         });
       }
     }
