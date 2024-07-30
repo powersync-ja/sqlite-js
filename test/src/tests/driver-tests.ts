@@ -38,23 +38,21 @@ export function describeDriverTests(
       dbPath = `test-db/${testNameSanitized}.db`;
     });
 
-    if (features.rawResults) {
-      test('basic select - raw', async () => {
-        await using driver = await open();
-        await using connection = await driver.reserveConnection();
-        using s = connection.prepare('select 1 as one', {
-          rawResults: true
-        });
-        const { rows } = await s.step();
-
-        expect(rows).toEqual([[1]]);
-
-        if (features.getColumns) {
-          const columns = await s.getColumns();
-          expect(columns).toEqual(['one']);
-        }
+    test.skipIf(!features.rawResults)('basic select - raw', async () => {
+      await using driver = await open();
+      await using connection = await driver.reserveConnection();
+      using s = connection.prepare('select 1 as one', {
+        rawResults: true
       });
-    }
+      const { rows } = await s.step();
+
+      expect(rows).toEqual([[1]]);
+
+      if (features.getColumns) {
+        const columns = await s.getColumns();
+        expect(columns).toEqual(['one']);
+      }
+    });
 
     test('basic select - object', async () => {
       await using driver = await open();
@@ -123,17 +121,18 @@ export function describeDriverTests(
       expect(rows).toEqual([{ one: 1, two: 2 }]);
     });
 
-    test('skip named arg', async () => {
-      await using driver = await open();
-      await using connection = await driver.reserveConnection();
-      using s = connection.prepare('select :one as one, :two as two');
-      s.bind({ two: 2 });
+    test.skipIf(!features.allowsMissingParameters)(
+      'skip named arg',
+      async () => {
+        await using driver = await open();
+        await using connection = await driver.reserveConnection();
+        using s = connection.prepare('select :one as one, :two as two');
+        s.bind({ two: 2 });
 
-      if (features.allowsMissingParameters) {
         const { rows } = await s.step();
         expect(rows).toEqual([{ one: null, two: 2 }]);
       }
-    });
+    );
 
     test('rebind arg', async () => {
       await using driver = await open();
