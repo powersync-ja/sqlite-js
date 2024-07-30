@@ -21,10 +21,12 @@ import {
   SqliteParseResponse,
   SqliteParse,
   SqliteDriverStatement,
-  StepOptions
+  StepOptions,
+  SqliteDriverError
 } from '../driver-api.js';
 
 import { ReadWriteConnectionPool } from '../driver-util.js';
+import { mapError } from './util.js';
 
 export function betterSqlitePool(
   path: string,
@@ -40,7 +42,60 @@ export function betterSqlitePool(
   });
 }
 
-class BetterSqlitePreparedStatement implements SqliteDriverStatement {
+interface InternalStatement extends SqliteDriverStatement {
+  getColumnsSync(): string[];
+  stepSync(n?: number, options?: StepOptions): SqliteStepResponse;
+
+  readonly source: string;
+
+  readonly persisted: boolean;
+}
+
+class ErrorStatement implements InternalStatement {
+  readonly error: SqliteDriverError;
+  readonly source: string;
+  readonly persisted: boolean;
+
+  constructor(
+    source: string,
+    error: SqliteDriverError,
+    options: PrepareOptions
+  ) {
+    this.error = error;
+    this.source = source;
+    this.persisted = options.persist ?? false;
+  }
+
+  getColumnsSync(): string[] {
+    throw this.error;
+  }
+  stepSync(n?: number, options?: StepOptions): SqliteStepResponse {
+    throw this.error;
+  }
+  async getColumns(): Promise<string[]> {
+    throw this.error;
+  }
+  bind(parameters: SqliteParameterBinding): void {
+    // no-op
+  }
+  async step(n?: number, options?: StepOptions): Promise<SqliteStepResponse> {
+    throw this.error;
+  }
+
+  finalize(): void {
+    // no-op
+  }
+
+  reset(options?: ResetOptions): void {
+    // no-op
+  }
+
+  [Symbol.dispose](): void {
+    // no-op
+  }
+}
+
+class BetterSqlitePreparedStatement implements InternalStatement {
   public statement: bsqlite.Statement;
   private options: PrepareOptions;
   private bindPositional: SqliteValue[] = [];
@@ -60,6 +115,10 @@ class BetterSqlitePreparedStatement implements SqliteDriverStatement {
     if (typeof Symbol.dispose != 'undefined') {
       this[Symbol.dispose] = () => this.finalize();
     }
+  }
+
+  get source() {
+    return this.statement.source;
   }
 
   async getColumns(): Promise<string[]> {
@@ -95,7 +154,11 @@ class BetterSqlitePreparedStatement implements SqliteDriverStatement {
   }
 
   async step(n?: number, options?: StepOptions): Promise<SqliteStepResponse> {
-    return this.stepSync(n, options);
+    try {
+      return this.stepSync(n, options);
+    } catch (e) {
+      throw mapError(e);
+    }
   }
 
   stepSync(n?: number, options?: StepOptions): SqliteStepResponse {
@@ -173,7 +236,7 @@ class BetterSqlitePreparedStatement implements SqliteDriverStatement {
 
 export class BetterSqliteConnection implements SqliteDriverConnection {
   con: bsqlite.Database;
-  statements = new Map<number, BetterSqlitePreparedStatement>();
+  statements = new Map<number, InternalStatement>();
 
   constructor(path: string, options?: bsqlite.Options) {
     this.con = new DatabaseConstructor(path, options);
@@ -188,18 +251,19 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     if (remainingStatements.length > 0) {
       const statement = remainingStatements[0];
       throw new Error(
-        `${remainingStatements.length} statements not finalized. First: ${statement.statement.source}`
+        `${remainingStatements.length} statements not finalized. First: ${statement.source}`
       );
     }
     this.con.close();
   }
 
-  prepare(
-    sql: string,
-    options?: PrepareOptions
-  ): BetterSqlitePreparedStatement {
-    const statement = this.con.prepare(sql);
-    return new BetterSqlitePreparedStatement(statement, options ?? {});
+  prepare(sql: string, options?: PrepareOptions): InternalStatement {
+    try {
+      const statement = this.con.prepare(sql);
+      return new BetterSqlitePreparedStatement(statement, options ?? {});
+    } catch (error) {
+      return new ErrorStatement(sql, mapError(error), options ?? {});
+    }
   }
 
   private requireStatement(id: number) {
@@ -291,7 +355,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
         results.push(result);
       } catch (e: any) {
         results.push({
-          error: { message: e.message, stack: e.stack, code: 'ERR' }
+          error: mapError(e)
         });
       }
     }

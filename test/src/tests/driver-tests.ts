@@ -7,6 +7,7 @@ import { SqliteDriverConnectionPool } from '../../../lib/driver-api.js';
 export interface DriverFeatures {
   getColumns: boolean;
   rawResults: boolean;
+  allowsMissingParameters: boolean;
 }
 
 export function describeDriverTests(
@@ -122,13 +123,16 @@ export function describeDriverTests(
       expect(rows).toEqual([{ one: 1, two: 2 }]);
     });
 
-    test.skip('skip named arg', async () => {
+    test('skip named arg', async () => {
       await using driver = await open();
       await using connection = await driver.reserveConnection();
       using s = connection.prepare('select :one as one, :two as two');
       s.bind({ two: 2 });
-      const { rows } = await s.step();
-      expect(rows).toEqual([{ one: null, two: 2 }]);
+
+      if (features.allowsMissingParameters) {
+        const { rows } = await s.step();
+        expect(rows).toEqual([{ one: null, two: 2 }]);
+      }
     });
 
     test('rebind arg', async () => {
@@ -200,14 +204,14 @@ export function describeDriverTests(
       s.reset();
       const { rows: rows2 } = await s.step();
       s.reset({ clear_bindings: true });
-      const { rows: rows3 } = await s.step();
 
       expect(rows1).toEqual([{ one: 1, two: 2 }]);
       expect(rows2).toEqual([{ one: 1, two: 2 }]);
-      // TODO
-      // expect(error).toMatchObject({
-      //   message: 'Too few parameter values were provided'
-      // });
+
+      if (features.allowsMissingParameters) {
+        const { rows: rows3 } = await s.step();
+        expect(rows3).toEqual([{ one: null, two: null }]);
+      }
     });
 
     test('partial reset', async () => {
@@ -261,11 +265,11 @@ export function describeDriverTests(
       await using driver = await open();
       await using connection = await driver.reserveConnection();
       using s = connection.prepare('select foobar');
-      expect(await s.getColumns().catch((e) => e)).toEqual({
+      expect(await s.getColumns().catch((e) => e)).toMatchObject({
         code: 'SQLITE_ERROR',
         message: 'no such column: foobar'
       });
-      expect(await s.step().catch((e) => e)).toEqual({
+      expect(await s.step().catch((e) => e)).toMatchObject({
         code: 'SQLITE_ERROR',
         message: 'no such column: foobar'
       });
@@ -278,7 +282,7 @@ export function describeDriverTests(
         "select json_each.value from json_each('test')"
       );
       expect(await s.getColumns()).toEqual(['value']);
-      expect(await s.step().catch((e) => e)).toEqual({
+      expect(await s.step().catch((e) => e)).toMatchObject({
         code: 'SQLITE_ERROR',
         message: 'malformed JSON'
       });

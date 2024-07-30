@@ -1,14 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  esbuild: { target: 'es2022', exclude: /node/ },
+  esbuild: { target: 'es2022' },
   test: {
     environment: 'node',
-    setupFiles: [] // Add any setup files if necessary
-  },
-  resolve: {
-    alias: {
-      'node:sqlite': 'node:sqlite'
-    }
+    include: ['test/src/**/*.test.ts']
   }
 });

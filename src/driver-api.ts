@@ -10,12 +10,14 @@ export enum SqliteCommandType {
   parse = 7
 }
 
+export interface SqliteDriverError {
+  message: string;
+  code: string;
+  stack?: string;
+}
+
 export interface SqliteCommandResponse {
-  error?: {
-    message: string;
-    code: string;
-    stack?: string;
-  };
+  error?: SqliteDriverError;
   skipped?: true;
 }
 

@@ -1,5 +1,4 @@
 import type * as bsqlite from 'better-sqlite3';
-import DatabaseConstructor from 'better-sqlite3';
 import { createRequire } from 'node:module';
 import * as worker_threads from 'worker_threads';
 import {
@@ -22,10 +21,8 @@ import {
 const require = createRequire(import.meta.url);
 
 import { Deferred } from '../deferred.js';
-import {
-  ReadWriteConnectionPool,
-  SingleConnectionPool
-} from '../driver-util.js';
+import { ReadWriteConnectionPool } from '../driver-util.js';
+import { SqliteError } from './util.js';
 
 export function betterSqliteAsyncPool(
   path: string,
@@ -192,10 +189,7 @@ export class BetterSqliteAsyncConnection implements SqliteDriverConnection {
     const error = (result as any)?.error;
     if (error != null) {
       return {
-        error: new DatabaseConstructor.SqliteError(
-          error.stack ?? error.message,
-          error.code ?? 'ERR'
-        )
+        error: new SqliteError(error)
       } as any;
     }
     return p;

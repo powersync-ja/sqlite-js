@@ -5,7 +5,7 @@ import { describeImplTests } from './tests/impl-tests.js';
 
 describeDriverTests(
   'better-sqlite3-async-pool',
-  { getColumns: true, rawResults: true },
+  { getColumns: true, rawResults: true, allowsMissingParameters: false },
   betterSqliteAsyncPool
 );
 

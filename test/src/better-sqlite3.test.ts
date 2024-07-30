@@ -5,7 +5,7 @@ import { describeImplTests } from './tests/impl-tests.js';
 
 describeDriverTests(
   'better-sqlite3',
-  { getColumns: true, rawResults: true },
+  { getColumns: true, rawResults: true, allowsMissingParameters: false },
   betterSqlitePool
 );
 
