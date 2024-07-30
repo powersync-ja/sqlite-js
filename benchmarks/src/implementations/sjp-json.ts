@@ -46,6 +46,17 @@ export class JSPJsonImpl extends Benchmark {
     );
     await c.execute('CREATE INDEX i3a ON t3(a)');
     await c.execute('CREATE INDEX i3b ON t3(b)');
+
+    let promises = [];
+    for (let i = 0; i < 10; i++) {
+      promises.push(
+        (async () => {
+          await using c = await db.reserveConnection({ readonly: true });
+          await new Promise((resolve) => setTimeout(resolve, 1));
+        })()
+      );
+    }
+    await Promise.all(promises);
   }
 
   async tearDown(): Promise<void> {
@@ -81,7 +92,7 @@ export class JSPJsonImpl extends Benchmark {
         const n = this.random.nextInt(0, 100000);
         buffer.push([i + 1, n, numberName(n)]);
 
-        if (buffer.length > 100) {
+        if (buffer.length >= 100) {
           await s.execute([JSON.stringify(buffer)]);
           buffer = [];
         }
@@ -107,7 +118,7 @@ export class JSPJsonImpl extends Benchmark {
       for (let i = 0; i < 25000; i++) {
         const n = this.random.nextInt(0, 100000);
         buffer.push([i + 1, n, numberName(n)]);
-        if (buffer.length > 100) {
+        if (buffer.length >= 100) {
           await s.execute([JSON.stringify(buffer)]);
           buffer = [];
         }
@@ -157,13 +168,19 @@ export class JSPJsonImpl extends Benchmark {
   // Test 7: 5000 SELECTs with an index
   async test7(): Promise<void> {
     let promises: Promise<void>[] = [];
-    for (let batch = 0; batch < 5; batch++) {
+    const batchSize = 500;
+    const batches = Math.ceil(5000 / batchSize);
+    for (let batch = 0; batch < batches; batch++) {
       const promise = this.db.transaction(
         async (tx) => {
           using s = tx.prepare<{ count: number; avg: number }>(
             'SELECT count(*) count, avg(b) avg FROM t3 WHERE b>=? AND b<?'
           );
-          for (let i = batch * 1000; i < batch * 1000 + 1000; i++) {
+          for (
+            let i = batch * batchSize;
+            i < batch * batchSize + batchSize && i < 5000;
+            i++
+          ) {
             const row = (await s.select([i * 100, i * 100 + 100]))[0];
             if (i < 1000) {
               assert(row.count > 8);
@@ -196,16 +213,19 @@ export class JSPJsonImpl extends Benchmark {
   async test9(): Promise<void> {
     await using db = await this.db.reserveConnection();
     await db.transaction(async (tx) => {
-      using s = tx.prepare('UPDATE t3 SET b=? WHERE a=?');
-      const pipeline = tx.pipeline();
+      using s = tx.prepare(
+        'UPDATE t3 SET b = e.value ->> 1 FROM json_each(?) e WHERE a = e.value ->> 0'
+      );
+      let batch: any[][] = [];
       for (let i = 0; i < 25000; i++) {
         const n = this.random.nextInt(0, 100000);
-        pipeline.execute(s, [n, i + 1]);
-        if (pipeline.count > 100) {
-          await pipeline.flush();
+        batch.push([i + 1, n]);
+        if (batch.length >= 100) {
+          await s.execute([JSON.stringify(batch)]);
+          batch = [];
         }
       }
-      await pipeline.flush();
+      await s.execute([JSON.stringify(batch)]);
     });
     await db.execute('PRAGMA wal_checkpoint(RESTART)');
   }
@@ -214,16 +234,20 @@ export class JSPJsonImpl extends Benchmark {
   async test10(): Promise<void> {
     await using db = await this.db.reserveConnection();
     await db.transaction(async (tx) => {
-      using s = tx.prepare('UPDATE t3 SET c=? WHERE a=?');
-      const pipeline = tx.pipeline();
+      using s = tx.prepare(
+        'UPDATE t3 SET c = e.value ->> 1 FROM json_each(?) e WHERE a = e.value ->> 0'
+      );
+
+      let batch: any[][] = [];
       for (let i = 0; i < 25000; i++) {
         const n = this.random.nextInt(0, 100000);
-        pipeline.execute(s, [numberName(n), i + 1]);
-        if (pipeline.count > 100) {
-          await pipeline.flush();
+        batch.push([i + 1, numberName(n)]);
+        if (batch.length >= 100) {
+          await s.execute([JSON.stringify(batch)]);
+          batch = [];
         }
       }
-      await pipeline.flush();
+      await s.execute([JSON.stringify(batch)]);
     });
     await db.execute('PRAGMA wal_checkpoint(RESTART)');
   }
@@ -263,14 +287,20 @@ export class JSPJsonImpl extends Benchmark {
   async test15(): Promise<void> {
     await using db = await this.db.reserveConnection();
     await db.transaction(async (tx) => {
-      using s = tx.prepare('INSERT INTO t1(a, b, c) VALUES(?, ?, ?)');
-      const pipeline = tx.pipeline();
+      using s = tx.prepare(
+        'INSERT INTO t1(a, b, c) SELECT value ->> 0, value ->> 1, value ->> 2 FROM json_each(?)'
+      );
       await tx.execute('DELETE FROM t1');
+      let batch: any[][] = [];
       for (let i = 0; i < 12000; i++) {
         const n = this.random.nextInt(0, 100000);
-        pipeline.execute(s, [i + 1, n, numberName(n)]);
+        batch.push([i + 1, n, numberName(n)]);
+        if (batch.length >= 100) {
+          await s.execute([JSON.stringify(batch)]);
+          batch = [];
+        }
       }
-      await pipeline.flush();
+      await s.execute([JSON.stringify(batch)]);
     });
     await db.execute('PRAGMA wal_checkpoint(RESTART)');
   }

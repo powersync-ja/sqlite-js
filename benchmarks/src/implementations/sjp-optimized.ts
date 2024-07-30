@@ -46,6 +46,17 @@ export class JSPOptimizedImpl extends Benchmark {
     );
     await c.execute('CREATE INDEX i3a ON t3(a)');
     await c.execute('CREATE INDEX i3b ON t3(b)');
+
+    let promises = [];
+    for (let i = 0; i < 10; i++) {
+      promises.push(
+        (async () => {
+          await using c = await db.reserveConnection({ readonly: true });
+          await new Promise((resolve) => setTimeout(resolve, 1));
+        })()
+      );
+    }
+    await Promise.all(promises);
   }
 
   async tearDown(): Promise<void> {
