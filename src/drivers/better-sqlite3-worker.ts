@@ -1,8 +1,8 @@
 import { BetterSqliteConnection } from './better-sqlite3-driver.js';
 
 import * as worker_threads from 'worker_threads';
-import { mapError } from './util.js';
 import { SqliteDriverError } from '../driver-api.js';
+import { Deferred } from '../deferred.js';
 
 const port = worker_threads.parentPort;
 if (port != null) {
@@ -12,7 +12,7 @@ if (port != null) {
     const [message, id, args] = value;
 
     if (message == 'open') {
-      db = new BetterSqliteConnection(args.path);
+      db = new BetterSqliteConnection(args.path, args.options);
       port.postMessage({ id });
     } else if (message == 'close') {
       try {

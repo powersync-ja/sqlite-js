@@ -104,7 +104,7 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
 
 export interface DriverFactory {
   openConnection(
-    options?: ReserveConnectionOptions
+    options?: ReserveConnectionOptions & { name?: string }
   ): Promise<SqliteDriverConnection>;
 }
 
@@ -176,7 +176,10 @@ class MultiConnectionPool implements SqliteDriverConnectionPool {
   private async expandPool(
     options?: ReserveConnectionOptions
   ): Promise<SqliteDriverConnection> {
-    const connection = await this.factory.openConnection(options);
+    const connection = await this.factory.openConnection({
+      ...options,
+      name: `connection-${this._allConnections.size + 1}`
+    });
     this._allConnections.add(connection);
     return connection;
   }
@@ -242,9 +245,11 @@ export class ReadWriteConnectionPool implements SqliteDriverConnectionPool {
   constructor(private factory: DriverFactory) {
     this.readPool = new MultiConnectionPool(factory);
 
-    this.initPromise = factory.openConnection().then((con) => {
-      this.writePool = new SingleConnectionPool(con);
-    });
+    this.initPromise = factory
+      .openConnection({ readonly: false, name: 'writer' })
+      .then((con) => {
+        this.writePool = new SingleConnectionPool(con);
+      });
 
     if (typeof Symbol.asyncDispose != 'undefined') {
       this[Symbol.asyncDispose] = () => this.close();

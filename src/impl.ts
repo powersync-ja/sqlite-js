@@ -78,7 +78,9 @@ export class ConnectionPoolImpl
   ): Promise<T> {
     const r = await this.reserveConnection(options);
     try {
-      return r.transaction(callback, options);
+      return r.transaction(callback, {
+        type: options?.type ?? (options?.readonly ? 'deferred' : 'exclusive')
+      });
     } finally {
       await r.release();
     }
@@ -231,6 +233,7 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
 
 export class ConnectionImpl implements SqliteConnection {
   private begin: PreparedQuery<{}> | undefined;
+  private beginExclusive: PreparedQuery<{}> | undefined;
   private commit: PreparedQuery<{}> | undefined;
   private rollback: PreparedQuery<{}> | undefined;
 
@@ -238,13 +241,20 @@ export class ConnectionImpl implements SqliteConnection {
 
   async transaction<T>(
     callback: (tx: SqliteTransaction) => Promise<T>,
-    options: TransactionOptions
+    options?: TransactionOptions
   ): Promise<T> {
+    this.beginExclusive ??= this.prepare('BEGIN EXCLUSIVE', undefined, {
+      persist: true
+    });
     this.begin ??= this.prepare('BEGIN', undefined, { persist: true });
     this.commit ??= this.prepare('COMMIT', undefined, { persist: true });
     this.rollback ??= this.prepare('ROLLBACK', undefined, { persist: true });
 
-    await this.begin.execute();
+    if ((options?.type ?? 'exclusive') == 'exclusive') {
+      await this.beginExclusive.execute();
+    } else {
+      await this.begin.execute();
+    }
     try {
       const tx = new TransactionImpl(this);
       const result = await callback(tx);

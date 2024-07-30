@@ -33,7 +33,10 @@ export function nodeSqlitePool(path: string): SqliteDriverConnectionPool {
     async openConnection(options) {
       const sqlite = await import('node:sqlite');
       const db = new sqlite.DatabaseSync(path);
-      return new NodeSqliteConnection(db, {});
+      return new NodeSqliteConnection(db, {
+        readonly: options?.readonly,
+        name: options?.name
+      });
     }
   });
 }
@@ -220,11 +223,20 @@ class NodeSqliteSyncStatement implements InternalStatement {
 export class NodeSqliteConnection implements SqliteDriverConnection {
   con: sqlite.DatabaseSync;
   statements = new Map<number, InternalStatement>();
+  name: string;
 
-  constructor(db: sqlite.DatabaseSync, options: any) {
+  constructor(
+    db: sqlite.DatabaseSync,
+    options?: { readonly?: boolean; name?: string }
+  ) {
     this.con = db;
     this.con.exec('PRAGMA journal_mode = WAL');
     this.con.exec('PRAGMA synchronous = normal');
+    this.con.exec('PRAGMA busy_timeout = 5000');
+    if (options?.readonly) {
+      this.con.exec('PRAGMA query_only = true');
+    }
+    this.name = options?.name ?? '';
   }
 
   async close() {
@@ -259,6 +271,7 @@ export class NodeSqliteConnection implements SqliteDriverConnection {
 
   private _prepare(command: SqlitePrepare): SqliteCommandResponse {
     const { id, sql } = command;
+
     const statement = this.prepare(sql, {
       bigint: command.bigint,
       persist: command.persist,

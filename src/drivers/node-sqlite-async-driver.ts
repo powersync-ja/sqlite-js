@@ -9,13 +9,16 @@ import { AsyncDriverConnection } from './generic-async-driver.js';
 export function nodeSqliteAsyncPool(path: string): SqliteDriverConnectionPool {
   return new ReadWriteConnectionPool({
     async openConnection(options) {
-      return new AsyncDriverConnection(
+      const con = new AsyncDriverConnection(
         require.resolve('./node-sqlite-worker.js'),
         path,
         {
-          readonly: options?.readonly || false
+          readonly: options?.readonly ?? false,
+          name: options?.name
         }
       );
+
+      return con;
     }
   });
 }

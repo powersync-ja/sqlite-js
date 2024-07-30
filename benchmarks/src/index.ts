@@ -1,13 +1,16 @@
 import {
   ConnectionPoolImpl,
   betterSqliteAsyncPool,
-  betterSqlitePool
+  betterSqlitePool,
+  nodeSqliteAsyncPool,
+  nodeSqlitePool
 } from '../../lib/index.js';
 import { Benchmark } from './Benchmark.js';
 import { BenchmarkResults } from './BenchmarkResults.js';
 import { BetterSqlite3Impl } from './implementations/better-sqlite3.js';
 import { NodeSqliteImpl } from './implementations/node-sqlite.js';
 import { NodeSqlite3Impl } from './implementations/node-sqlite3.js';
+import { JSPJsonImpl } from './implementations/sjp-json.js';
 import { JSPOptimizedImpl } from './implementations/sjp-optimized.js';
 import { JSPImpl } from './implementations/sjp.js';
 
@@ -38,10 +41,46 @@ async function main() {
         const db = new ConnectionPoolImpl(betterSqliteAsyncPool(path));
         return db;
       })
-    )
-    // await test(new BetterSqlite3Impl('better-sqlite3', dir)),
-    // await test(new NodeSqlite3Impl('node-sqlite3', dir)),
-    // await test(new NodeSqliteImpl('node:sqlite', dir))
+    ),
+    await test(
+      new JSPJsonImpl('sjp-sync-json', dir, (path) => {
+        const db = new ConnectionPoolImpl(betterSqlitePool(path));
+        return db;
+      })
+    ),
+    await test(
+      new JSPJsonImpl('sjp-async-json', dir, (path) => {
+        const db = new ConnectionPoolImpl(betterSqliteAsyncPool(path));
+        return db;
+      })
+    ),
+    await test(
+      new JSPImpl('node-sjp-sync', dir, (path) => {
+        const db = new ConnectionPoolImpl(nodeSqlitePool(path));
+        return db;
+      })
+    ),
+    await test(
+      new JSPImpl('node-sjp-async', dir, (path) => {
+        const db = new ConnectionPoolImpl(nodeSqliteAsyncPool(path));
+        return db;
+      })
+    ),
+    await test(
+      new JSPOptimizedImpl('node-sjp-sync-optimized', dir, (path) => {
+        const db = new ConnectionPoolImpl(nodeSqlitePool(path));
+        return db;
+      })
+    ),
+    await test(
+      new JSPOptimizedImpl('node-sjp-async-optimized', dir, (path) => {
+        const db = new ConnectionPoolImpl(nodeSqliteAsyncPool(path));
+        return db;
+      })
+    ),
+    await test(new BetterSqlite3Impl('better-sqlite3', dir)),
+    await test(new NodeSqlite3Impl('node-sqlite3', dir)),
+    await test(new NodeSqliteImpl('node:sqlite', dir))
   ];
 
   const first = results[0];

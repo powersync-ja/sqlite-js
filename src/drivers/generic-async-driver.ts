@@ -79,6 +79,11 @@ interface CommandQueueItem {
   reject?: (e: any) => void;
 }
 
+export interface AsyncDriverConnectionOptions {
+  name?: string;
+  readonly?: boolean;
+}
+
 export class AsyncDriverConnection implements SqliteDriverConnection {
   worker: worker_threads.Worker;
   private callbacks = new Map<number, (value: any) => void>();
@@ -89,7 +94,11 @@ export class AsyncDriverConnection implements SqliteDriverConnection {
 
   buffer: CommandQueueItem[] = [];
 
-  constructor(workerPath: string, path: string, options?: bsqlite.Options) {
+  constructor(
+    workerPath: string,
+    path: string,
+    options?: AsyncDriverConnectionOptions
+  ) {
     const worker = new worker_threads.Worker(workerPath);
     this.post('open', { path, options });
     worker.addListener('error', (err) => {
