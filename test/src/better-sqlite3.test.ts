@@ -3,7 +3,11 @@ import { ConnectionPoolImpl } from '../../lib/impl.js';
 import { describeDriverTests } from './tests/driver-tests.js';
 import { describeImplTests } from './tests/impl-tests.js';
 
-describeDriverTests('better-sqlite3', betterSqlitePool);
+describeDriverTests(
+  'better-sqlite3',
+  { getColumns: true, rawResults: true },
+  betterSqlitePool
+);
 
 describeImplTests(
   'better-sqlite3',

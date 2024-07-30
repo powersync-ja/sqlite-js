@@ -3,7 +3,11 @@ import { ConnectionPoolImpl } from '../../lib/impl.js';
 import { describeDriverTests } from './tests/driver-tests.js';
 import { describeImplTests } from './tests/impl-tests.js';
 
-describeDriverTests('better-sqlite3-async-pool', betterSqliteAsyncPool);
+describeDriverTests(
+  'better-sqlite3-async-pool',
+  { getColumns: true, rawResults: true },
+  betterSqliteAsyncPool
+);
 
 describeImplTests(
   'better-sqlite3-async-pool',

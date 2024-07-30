@@ -144,7 +144,7 @@ class NodeSqliteSyncStatement implements SqliteDriverStatement {
   reset(options?: ResetOptions): void {
     if (this.iterator) {
       const iter = this.iterator;
-      iter.return!();
+      iter.return?.();
       this.iterator = undefined;
     }
     if (options?.clear_bindings) {
