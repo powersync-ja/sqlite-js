@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "test": "tsc -p ./test/tsconfig.json && mocha",
+    "test": "tsc -b ./test/tsconfig.json && mocha",
     "format": "prettier . --write",
     "build": "tsc -b"
   },

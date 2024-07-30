@@ -22,7 +22,7 @@ const require = createRequire(import.meta.url);
 
 import { Deferred } from '../deferred.js';
 import { ReadWriteConnectionPool } from '../driver-util.js';
-import { SqliteError } from './util.js';
+import { mapError, SqliteError } from './util.js';
 
 export function betterSqliteAsyncPool(
   path: string,

@@ -281,7 +281,9 @@ export function describeDriverTests(
       using s = connection.prepare(
         "select json_each.value from json_each('test')"
       );
-      expect(await s.getColumns()).toEqual(['value']);
+      if (features.getColumns) {
+        expect(await s.getColumns()).toEqual(['value']);
+      }
       expect(await s.step().catch((e) => e)).toMatchObject({
         code: 'SQLITE_ERROR',
         message: 'malformed JSON'

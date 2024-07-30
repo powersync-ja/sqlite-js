@@ -331,9 +331,10 @@ export class ConnectionImpl implements SqliteConnection {
     if (options?.includeChanges) {
       const results = await run(
         this.driver,
-        'select changes(), last_insert_rowid()'
+        'select changes() as changes, last_insert_rowid() as rowid'
       );
-      const [[changes, rowid]] = results;
+      const [{ changes, rowid }] = results;
+
       rs.changes = changes as number;
       rs.rowId = rowid as number;
     }
@@ -365,9 +366,9 @@ export class ConnectionImpl implements SqliteConnection {
     if (options?.includeChanges) {
       const results = await run(
         this.driver,
-        'select changes(), last_insert_rowid()'
+        'select changes() as changes, last_insert_rowid() as rowid'
       );
-      const [[changes, rowid]] = results;
+      const [{ changes, rowid }] = results;
       const rs = new ResultSetImpl<T>([]);
       rs.changes = changes as number;
       rs.rowId = rowid as number;
@@ -491,9 +492,9 @@ class ResultSetImpl<T extends SqliteRowObject> implements ResultSet<T> {
 }
 
 async function run(con: SqliteDriverConnection, sql: string) {
-  using statement = con.prepare(sql, { rawResults: true });
+  using statement = con.prepare(sql, { rawResults: false });
   const { rows } = await statement.step();
-  return rows as SqliteValue[][];
+  return rows as SqliteRowObject[];
 }
 
 class QueryImpl<T extends SqliteRowObject> implements SqliteQuery<T> {
@@ -662,9 +663,9 @@ class ConnectionPreparedQueryImpl<T extends SqliteRowObject>
       if (options?.includeChanges) {
         const results = await run(
           this.driver,
-          'select changes(), last_insert_rowid()'
+          'select changes() as changes, last_insert_rowid() as rowid'
         );
-        const [[changes, rowid]] = results;
+        const [{ changes, rowid }] = results;
         const rs = new ResultSetImpl<T>([]);
         rs.changes = changes as number;
         rs.rowId = rowid as number;
@@ -690,9 +691,9 @@ class ConnectionPreparedQueryImpl<T extends SqliteRowObject>
       if (options?.includeChanges) {
         const results = await run(
           this.driver,
-          'select changes(), last_insert_rowid()'
+          'select changes() as changes, last_insert_rowid() as rowid'
         );
-        const [[changes, rowid]] = results;
+        const [{ changes, rowid }] = results;
         const rs = new ResultSetImpl<T>([]);
         rs.changes = changes as number;
         rs.rowId = rowid as number;

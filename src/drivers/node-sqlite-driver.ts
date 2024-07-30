@@ -21,10 +21,12 @@ import {
   SqliteParseResponse,
   SqliteParse,
   SqliteDriverStatement,
-  StepOptions
+  StepOptions,
+  SqliteDriverError
 } from '../driver-api.js';
 
 import { ReadWriteConnectionPool } from '../driver-util.js';
+import { mapError, SqliteError } from './util.js';
 
 export function nodeSqlitePool(path: string): SqliteDriverConnectionPool {
   return new ReadWriteConnectionPool({
@@ -36,7 +38,59 @@ export function nodeSqlitePool(path: string): SqliteDriverConnectionPool {
   });
 }
 
-class NodeSqliteSyncStatement implements SqliteDriverStatement {
+interface InternalStatement extends SqliteDriverStatement {
+  getColumnsSync(): string[];
+  stepSync(n?: number, options?: StepOptions): SqliteStepResponse;
+
+  readonly source: string;
+
+  readonly persisted: boolean;
+}
+
+class ErrorStatement implements InternalStatement {
+  readonly error: SqliteDriverError;
+  readonly source: string;
+  readonly persisted: boolean;
+
+  constructor(
+    source: string,
+    error: SqliteDriverError,
+    options: PrepareOptions
+  ) {
+    this.error = error;
+    this.source = source;
+    this.persisted = options.persist ?? false;
+  }
+
+  getColumnsSync(): string[] {
+    throw this.error;
+  }
+  stepSync(n?: number, options?: StepOptions): SqliteStepResponse {
+    throw this.error;
+  }
+  async getColumns(): Promise<string[]> {
+    throw this.error;
+  }
+  bind(parameters: SqliteParameterBinding): void {
+    // no-op
+  }
+  async step(n?: number, options?: StepOptions): Promise<SqliteStepResponse> {
+    throw this.error;
+  }
+
+  finalize(): void {
+    // no-op
+  }
+
+  reset(options?: ResetOptions): void {
+    // no-op
+  }
+
+  [Symbol.dispose](): void {
+    // no-op
+  }
+}
+class NodeSqliteSyncStatement implements InternalStatement {
   public statement: sqlite.StatementSync;
   private options: PrepareOptions;
   private bindPositional: SqliteValue[] = [];
@@ -56,6 +110,10 @@ class NodeSqliteSyncStatement implements SqliteDriverStatement {
     if (typeof Symbol.dispose != 'undefined') {
       this[Symbol.dispose] = () => this.finalize();
     }
+  }
+
+  get source() {
+    return this.statement.sourceSQL();
   }
 
   async getColumns(): Promise<string[]> {
@@ -86,7 +144,11 @@ class NodeSqliteSyncStatement implements SqliteDriverStatement {
   }
 
   async step(n?: number, options?: StepOptions): Promise<SqliteStepResponse> {
-    return this.stepSync(n, options);
+    try {
+      return this.stepSync(n, options);
+    } catch (e) {
+      throw mapError(e);
+    }
   }
 
   stepSync(n?: number, options?: StepOptions): SqliteStepResponse {
@@ -157,7 +219,7 @@ class NodeSqliteSyncStatement implements SqliteDriverStatement {
 
 export class NodeSqliteConnection implements SqliteDriverConnection {
   con: sqlite.DatabaseSync;
-  statements = new Map<number, NodeSqliteSyncStatement>();
+  statements = new Map<number, InternalStatement>();
 
   constructor(db: sqlite.DatabaseSync, options: any) {
     this.con = db;
@@ -172,15 +234,19 @@ export class NodeSqliteConnection implements SqliteDriverConnection {
     if (remainingStatements.length > 0) {
       const statement = remainingStatements[0];
       throw new Error(
-        `${remainingStatements.length} statements not finalized. First: ${statement.statement.sourceSQL}`
+        `${remainingStatements.length} statements not finalized. First: ${statement.source}`
       );
     }
     this.con.close();
   }
 
-  prepare(sql: string, options?: PrepareOptions): NodeSqliteSyncStatement {
-    const statement = this.con.prepare(sql);
-    return new NodeSqliteSyncStatement(statement, options ?? {});
+  prepare(sql: string, options?: PrepareOptions): InternalStatement {
+    try {
+      const statement = this.con.prepare(sql);
+      return new NodeSqliteSyncStatement(statement, options ?? {});
+    } catch (e) {
+      return new ErrorStatement(sql, mapError(e), options ?? {});
+    }
   }
 
   private requireStatement(id: number) {

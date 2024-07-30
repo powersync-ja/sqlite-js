@@ -10,11 +10,11 @@ if (isMocha) {
     { getColumns: false, rawResults: false, allowsMissingParameters: true },
     nodeSqlitePool
   );
+
+  describeImplTests(
+    'node:sqlite',
+    (path) => new ConnectionPoolImpl(nodeSqlitePool(path))
+  );
 } else {
   test.skip('only running in mocha');
 }
-
-// describeImplTests(
-//   'node:sqlite',
-//   (path) => new ConnectionPoolImpl(nodeSqlitePool(path))
-// );
