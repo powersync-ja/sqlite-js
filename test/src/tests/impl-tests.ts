@@ -146,6 +146,28 @@ export function describeImplTests(
       expect(results2).toEqual([{ one: 1 }]);
     });
 
+    test('usingTransaction', async () => {
+      await using db = await open();
+      {
+        await using tx = await db.usingTransaction();
+        const results1 = await tx.select('select 1 as one');
+        expect(results1).toEqual([{ one: 1 }]);
+        await tx.commit();
+      }
+      {
+        await using tx = await db.usingTransaction();
+        const results1 = await tx.select('select 1 as one');
+        expect(results1).toEqual([{ one: 1 }]);
+        await tx.commit();
+      }
+      {
+        await using tx = await db.usingTransaction();
+        const results = await tx.select('select 1 as one');
+        expect(results).toEqual([{ one: 1 }]);
+        await tx.commit();
+      }
+    });
+
     test.skip('onUpdate', async () => {
       // Skipped: Not properly implemented yet.
 

@@ -12,6 +12,7 @@ import {
   SqliteConnectionPool,
   SqliteQuery,
   SqliteTransaction,
+  SqliteUsingTransaction,
   StreamedExecuteOptions,
   TablesChangedEvent,
   TablesChangedListener,
@@ -21,6 +22,7 @@ import {
   UpdateListener
 } from './api.js';
 import { SqliteArguments, SqliteValue } from './common.js';
+import { Deferred } from './deferred.js';
 import {
   PrepareOptions,
   SqliteDriverConnection,
@@ -84,6 +86,17 @@ export class ConnectionPoolImpl
     } finally {
       await r.release();
     }
+  }
+
+  async usingTransaction<T>(
+    options?: (TransactionOptions & ReserveConnectionOptions) | undefined
+  ): Promise<SqliteUsingTransaction> {
+    const r = await this.reserveConnection(options);
+    const tx = await r.connection.usingTransaction(options);
+    (tx as UsingTransactionImpl).onComplete.finally(() => {
+      return r.release();
+    });
+    return tx;
   }
 
   async *executeStreamed<T extends SqliteRowObject>(
@@ -211,6 +224,12 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     return this.connection.transaction(callback, options);
   }
 
+  usingTransaction(
+    options?: TransactionOptions | undefined
+  ): Promise<SqliteUsingTransaction> {
+    return this.connection.usingTransaction(options);
+  }
+
   onUpdate(
     listener: UpdateListener,
     options?:
@@ -276,35 +295,53 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
 export class ConnectionImpl implements SqliteConnection {
   private begin: PreparedQuery<{}> | undefined;
   private beginExclusive: PreparedQuery<{}> | undefined;
-  private commit: PreparedQuery<{}> | undefined;
-  private rollback: PreparedQuery<{}> | undefined;
+  public commit: PreparedQuery<{}> | undefined;
+  public rollback: PreparedQuery<{}> | undefined;
 
   constructor(private driver: SqliteDriverConnection) {}
 
-  async transaction<T>(
-    callback: (tx: SqliteTransaction) => Promise<T>,
-    options?: TransactionOptions
-  ): Promise<T> {
+  private init() {
     this.beginExclusive ??= this.prepare('BEGIN EXCLUSIVE', undefined, {
       persist: true
     });
     this.begin ??= this.prepare('BEGIN', undefined, { persist: true });
     this.commit ??= this.prepare('COMMIT', undefined, { persist: true });
     this.rollback ??= this.prepare('ROLLBACK', undefined, { persist: true });
+  }
+
+  async usingTransaction(
+    options?: TransactionOptions
+  ): Promise<SqliteUsingTransaction> {
+    await this.init();
 
     if ((options?.type ?? 'exclusive') == 'exclusive') {
-      await this.beginExclusive.execute();
+      await this.beginExclusive!.execute();
     } else {
-      await this.begin.execute();
+      await this.begin!.execute();
+    }
+
+    return new UsingTransactionImpl(this);
+  }
+
+  async transaction<T>(
+    callback: (tx: SqliteTransaction) => Promise<T>,
+    options?: TransactionOptions
+  ): Promise<T> {
+    this.init();
+
+    if ((options?.type ?? 'exclusive') == 'exclusive') {
+      await this.beginExclusive!.execute();
+    } else {
+      await this.begin!.execute();
     }
     try {
       const tx = new TransactionImpl(this);
       const result = await callback(tx);
 
-      await this.commit.execute();
+      await this.commit!.execute();
       return result;
     } catch (e) {
-      await this.rollback.execute();
+      await this.rollback!.execute();
       throw e;
     }
   }
@@ -462,14 +499,14 @@ export class ConnectionImpl implements SqliteConnection {
 export class TransactionImpl implements SqliteTransaction {
   private preparedQueries: PreparedQuery<any>[] = [];
 
-  constructor(private con: ConnectionImpl) {}
+  constructor(public con: ConnectionImpl) {}
 
   getAutoCommit(): Promise<boolean> {
     throw new Error('Method not implemented.');
   }
 
   async rollback(): Promise<void> {
-    await this.select('ROLLBACK');
+    await this.con.rollback!.execute();
   }
 
   prepare<T extends SqliteRowObject>(
@@ -531,6 +568,40 @@ export class TransactionImpl implements SqliteTransaction {
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
   ): Promise<T | null> {
     return this.con.getOptional(query, args, options);
+  }
+}
+
+class UsingTransactionImpl
+  extends TransactionImpl
+  implements SqliteUsingTransaction
+{
+  [Symbol.asyncDispose]: () => Promise<void> = undefined as any;
+
+  private didCommit = false;
+
+  private completeDeferred = new Deferred<void>();
+
+  get onComplete(): Promise<void> {
+    return this.completeDeferred.promise;
+  }
+
+  constructor(connection: ConnectionImpl) {
+    super(connection);
+    if (typeof Symbol.asyncDispose != 'undefined') {
+      this[Symbol.asyncDispose] = () => this.dispose();
+    }
+  }
+
+  async commit(): Promise<void> {
+    this.didCommit = true;
+    await this.con.commit!.execute();
+  }
+
+  async dispose(): Promise<void> {
+    if (!this.didCommit) {
+      await this.rollback();
+    }
+    this.completeDeferred.resolve();
   }
 }
 

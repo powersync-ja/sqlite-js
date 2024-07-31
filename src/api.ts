@@ -32,6 +32,19 @@ export interface SqliteConnectionPool {
     options?: TransactionOptions & ReserveConnectionOptions
   ): Promise<T>;
 
+  /**
+   * Usage:
+   *
+   * await using tx = await db.usingTransaction();
+   * ...
+   * await tx.commit();
+   *
+   * If commit is not called, the transaction is rolled back automatically.
+   */
+  usingTransaction(
+    options?: TransactionOptions & ReserveConnectionOptions
+  ): Promise<SqliteUsingTransaction>;
+
   close(): Promise<void>;
   [Symbol.asyncDispose](): Promise<void>;
 }
@@ -134,6 +147,19 @@ export interface SqliteConnection extends QueryInterface {
   ): Promise<T>;
 
   /**
+   * Usage:
+   *
+   * await using tx = await db.usingTransaction();
+   * ...
+   * await tx.commit();
+   *
+   * If commit is not called, the transaction is rolled back automatically.
+   */
+  usingTransaction(
+    options?: TransactionOptions
+  ): Promise<SqliteUsingTransaction>;
+
+  /**
    * Listen for individual update events as they occur.
    *
    * For efficiency, multiple updates may be batched together.
@@ -204,6 +230,12 @@ export interface SqliteTransaction extends QueryInterface {
   getAutoCommit(): Promise<boolean>;
 
   rollback(): Promise<void>;
+}
+
+export interface SqliteUsingTransaction extends SqliteTransaction {
+  commit(): Promise<void>;
+
+  [Symbol.asyncDispose](): Promise<void>;
 }
 
 export interface TransactionOptions {
