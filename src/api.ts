@@ -91,6 +91,36 @@ export interface QueryInterface {
     options?: QueryOptions & ReserveConnectionOptions
   ): Promise<T[]>;
 
+  /**
+   * Get a single row.
+   *
+   * Throws an exception if the query returns no results.
+   *
+   * @param query
+   * @param args
+   * @param options
+   */
+  get<T extends SqliteRowObject>(
+    query: string,
+    args?: SqliteArguments,
+    options?: QueryOptions & ReserveConnectionOptions
+  ): Promise<T>;
+
+  /**
+   * Get a single row.
+   *
+   * Returns null if the query returns no results.
+   *
+   * @param query
+   * @param args
+   * @param options
+   */
+  getOptional<T extends SqliteRowObject>(
+    query: string,
+    args?: SqliteArguments,
+    options?: QueryOptions & ReserveConnectionOptions
+  ): Promise<T | null>;
+
   pipeline(options?: ReserveConnectionOptions): QueryPipeline;
 }
 
@@ -201,11 +231,6 @@ export interface ResultSet<T extends SqliteRowObject = SqliteRowObject> {
 }
 
 export interface SqliteQuery<T extends SqliteRowObject> {
-  /**
-   * Returns a query that can be used in a transaction.
-   */
-  in(transaction: SqliteTransaction): SqliteQuery<T>;
-
   executeStreamed(options?: StreamedExecuteOptions): AsyncGenerator<ResultSet>;
 
   execute(options?: ExecuteOptions): Promise<ResultSet<T>>;
@@ -216,6 +241,20 @@ export interface SqliteQuery<T extends SqliteRowObject> {
    * Same as execute, but returns an array of row objects directly.
    */
   select(options?: QueryOptions): Promise<T[]>;
+
+  /**
+   * Get a single row.
+   *
+   * Throws an exception if the results contain no rows.
+   */
+  get(options?: QueryOptions): Promise<T>;
+
+  /**
+   * Get a single row.
+   *
+   * Returns null if the results contain no rows.
+   */
+  getOptional(options?: QueryOptions): Promise<T | null>;
 }
 
 export interface PreparedQuery<T extends SqliteRowObject> {
@@ -264,7 +303,9 @@ export interface QueryPipeline {
   execute(query: string | PreparedQuery<any>, args?: SqliteArguments): void;
 
   /**
-   * Flush all existing queries.
+   * Flush all existing queries, wait for the last query to complete.
+   *
+   * TODO: define error handling.
    */
   flush(): Promise<void>;
 
