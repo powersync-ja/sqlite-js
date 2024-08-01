@@ -41,9 +41,9 @@ export interface SqliteConnectionPool {
    *
    * If commit is not called, the transaction is rolled back automatically.
    */
-  usingTransaction(
+  begin(
     options?: TransactionOptions & ReserveConnectionOptions
-  ): Promise<SqliteUsingTransaction>;
+  ): Promise<SqliteBeginTransaction>;
 
   close(): Promise<void>;
   [Symbol.asyncDispose](): Promise<void>;
@@ -149,15 +149,13 @@ export interface SqliteConnection extends QueryInterface {
   /**
    * Usage:
    *
-   * await using tx = await db.usingTransaction();
+   * await using tx = await db.begin();
    * ...
    * await tx.commit();
    *
    * If commit is not called, the transaction is rolled back automatically.
    */
-  usingTransaction(
-    options?: TransactionOptions
-  ): Promise<SqliteUsingTransaction>;
+  begin(options?: TransactionOptions): Promise<SqliteBeginTransaction>;
 
   /**
    * Listen for individual update events as they occur.
@@ -232,9 +230,15 @@ export interface SqliteTransaction extends QueryInterface {
   rollback(): Promise<void>;
 }
 
-export interface SqliteUsingTransaction extends SqliteTransaction {
+export interface SqliteBeginTransaction extends SqliteTransaction {
   commit(): Promise<void>;
 
+  /**
+   * Rolls back the transaction.
+   *
+   * Does nothing if the transansaction is already committed or rolled back.
+   */
+  dispose(): Promise<void>;
   [Symbol.asyncDispose](): Promise<void>;
 }
 

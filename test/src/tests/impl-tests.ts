@@ -146,25 +146,56 @@ export function describeImplTests(
       expect(results2).toEqual([{ one: 1 }]);
     });
 
-    test('usingTransaction', async () => {
+    test('begin', async () => {
       await using db = await open();
       {
-        await using tx = await db.usingTransaction();
+        await using tx = await db.begin();
         const results1 = await tx.select('select 1 as one');
         expect(results1).toEqual([{ one: 1 }]);
         await tx.commit();
       }
       {
-        await using tx = await db.usingTransaction();
+        await using tx = await db.begin();
         const results1 = await tx.select('select 1 as one');
         expect(results1).toEqual([{ one: 1 }]);
         await tx.commit();
       }
       {
-        await using tx = await db.usingTransaction();
+        await using tx = await db.begin();
         const results = await tx.select('select 1 as one');
         expect(results).toEqual([{ one: 1 }]);
         await tx.commit();
+      }
+    });
+
+    test('begin - explicit commit in sequence', async () => {
+      await using db = await open();
+      {
+        await using tx1 = await db.begin();
+        const results1 = await tx1.select('select 1 as one');
+        expect(results1).toEqual([{ one: 1 }]);
+        await tx1.commit();
+        await using tx2 = await db.begin();
+        const results2 = await tx2.select('select 1 as one');
+        expect(results2).toEqual([{ one: 1 }]);
+        await tx2.commit();
+        await using tx3 = await db.begin();
+        const results3 = await tx3.select('select 1 as one');
+        expect(results3).toEqual([{ one: 1 }]);
+        await tx3.commit();
+      }
+    });
+
+    test('error when not using asyncDispose after begin', async () => {
+      await using db = await open();
+      const tx = await db.begin();
+      try {
+        await expect(() => tx.select('select 1 as one')).rejects.toMatchObject({
+          message: expect.stringContaining('dispose handler is not registered')
+        });
+      } finally {
+        // Just for the test itself
+        await tx.dispose();
       }
     });
 
