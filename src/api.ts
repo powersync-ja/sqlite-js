@@ -72,7 +72,7 @@ export interface QueryInterface {
     query: string,
     args?: SqliteArguments,
     options?: ReserveConnectionOptions
-  ): Promise<RunResults>;
+  ): Promise<RunResult>;
 
   stream<T extends SqliteRowObject>(
     query: string,
@@ -232,7 +232,7 @@ export interface TransactionOptions {
   type?: 'exclusive' | 'immediate' | 'deferred';
 }
 
-export interface RunResults {
+export interface RunResult {
   changes: number;
   lastInsertRowId: bigint;
 }
@@ -255,7 +255,7 @@ export interface PreparedQuery<T extends SqliteRowObject> {
   /**
    * Run the statement and return the number of changes.
    */
-  run(args?: SqliteArguments): Promise<RunResults>;
+  run(args?: SqliteArguments): Promise<RunResult>;
 
   dispose(): void;
   [Symbol.dispose](): void;

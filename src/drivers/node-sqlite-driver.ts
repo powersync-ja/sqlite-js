@@ -187,10 +187,9 @@ class NodeSqliteSyncStatement implements InternalStatement {
     try {
       const bindNamed = this.bindNamed;
       const bindPositional = this.bindPositional;
-      const bind = [bindPositional, bindNamed].filter((b) => b != null);
 
       statement.setReadBigInts(true);
-      const r = statement.run(...bind);
+      const r = statement.run(bindNamed, ...bindPositional);
       return {
         changes: Number(r.changes),
         lastInsertRowId: r.lastInsertRowid as bigint

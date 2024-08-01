@@ -6,6 +6,7 @@ import {
   QueryPipeline,
   ReserveConnectionOptions,
   ReservedSqliteConnection,
+  RunResult,
   SqliteBeginTransaction,
   SqliteConnection,
   SqliteConnectionPool,
@@ -22,7 +23,6 @@ import { SqliteArguments } from './common.js';
 import { Deferred } from './deferred.js';
 import {
   PrepareOptions,
-  SqliteRunResult,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
   SqliteDriverStatement,
@@ -56,7 +56,7 @@ export class ConnectionPoolImpl
     query: string,
     args?: SqliteArguments,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
-  ): Promise<SqliteRunResult> {
+  ): Promise<RunResult> {
     const r = await this.reserveConnection(options);
     try {
       return r.connection.run(query, args, options);
@@ -235,10 +235,7 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     return this.connection.close();
   }
 
-  run(
-    query: string,
-    args?: SqliteArguments | undefined
-  ): Promise<SqliteRunResult> {
+  run(query: string, args?: SqliteArguments | undefined): Promise<RunResult> {
     return this.connection.run(query, args);
   }
 
@@ -374,22 +371,12 @@ export class ConnectionImpl implements SqliteConnection {
     return new QueryPipelineImpl(this.driver);
   }
 
-  async run(query: string, args: SqliteArguments): Promise<SqliteRunResult> {
-    await this.select(query, args);
-    return await this._runResults();
-  }
-
-  async _runResults(): Promise<SqliteRunResult> {
-    const { changes, rowid } = await this.get(
-      'select changes() as changes, last_insert_rowid() as rowid',
-      undefined,
-      { bigint: true }
-    );
-
-    return {
-      changes: Number(changes as bigint),
-      lastInsertRowId: rowid as bigint
-    };
+  async run(query: string, args: SqliteArguments): Promise<RunResult> {
+    using statement = this.driver.prepare(query);
+    if (args != null) {
+      statement.bind(args);
+    }
+    return await statement.run();
   }
 
   async *stream<T extends SqliteRowObject>(
@@ -482,7 +469,7 @@ export class TransactionImpl implements SqliteTransaction {
     return this.con.pipeline();
   }
 
-  run(query: string, args: SqliteArguments): Promise<SqliteRunResult> {
+  run(query: string, args: SqliteArguments): Promise<RunResult> {
     return this.con.run(query, args);
   }
 
@@ -630,7 +617,7 @@ class ConnectionPoolPreparedQueryImpl<T extends SqliteRowObject>
     }
   }
 
-  async run(args?: SqliteArguments): Promise<SqliteRunResult> {
+  async run(args?: SqliteArguments): Promise<RunResult> {
     const r = await this.context.reserveConnection();
     try {
       const q = this.cachedQuery(r);
@@ -717,16 +704,11 @@ class ConnectionPreparedQueryImpl<T extends SqliteRowObject>
     }
   }
 
-  async run(args?: SqliteArguments): Promise<SqliteRunResult> {
-    try {
-      if (args != null) {
-        this.statement.bind(args);
-      }
-      await this.statement.step();
-      return await this.context._runResults();
-    } finally {
-      this.statement.reset();
+  async run(args?: SqliteArguments): Promise<RunResult> {
+    if (args != null) {
+      this.statement.bind(args);
     }
+    return await this.statement.run();
   }
 
   async select(args?: SqliteArguments): Promise<T[]> {
