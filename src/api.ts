@@ -1,9 +1,9 @@
-import { SqliteArguments, SqliteValue } from './common.js';
+import { SqliteArguments } from './common.js';
 import { SqliteRowObject } from './driver-api.js';
 
 export type SqliteDatabase = SqliteConnectionPool & SqliteConnection;
 
-export interface SqliteConnectionPool {
+export interface SqliteConnectionPool extends SqliteConnection {
   /**
    * Reserve a connection for the duration of the callback.
    *

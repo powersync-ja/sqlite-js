@@ -41,6 +41,19 @@ export class ConnectionPoolImpl
     }
   }
 
+  onUpdate(
+    listener: UpdateListener,
+    options?: { tables?: string[]; batchLimit?: number }
+  ): () => void {
+    throw new Error('Method not implemented.');
+  }
+  onTransactionClose(listener: TransactionCloseListener): () => void {
+    throw new Error('Method not implemented.');
+  }
+  onTablesChanged(listener: TablesChangedListener): () => void {
+    throw new Error('Method not implemented.');
+  }
+
   prepare<T extends SqliteRowObject>(
     sql: string,
     args?: SqliteArguments
