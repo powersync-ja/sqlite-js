@@ -1,23 +1,27 @@
-import type * as bsqlite from 'better-sqlite3';
 import * as worker_threads from 'worker_threads';
 import {
-  InferBatchResult,
-  InferCommandResult,
   PrepareOptions,
   ResetOptions,
-  SqliteCommand,
-  SqliteCommandResponse,
-  SqliteCommandType,
   SqliteDriverConnection,
   SqliteDriverStatement,
   SqliteParameterBinding,
-  SqliteStepResponse,
+  SqliteRunResult,
+  SqliteStepResult,
   StepOptions,
   UpdateListener
 } from '../driver-api.js';
 
 import { Deferred } from '../deferred.js';
 import { SqliteError } from './util.js';
+import {
+  InferBatchResult,
+  InferCommandResult,
+  isErrorResponse,
+  SqliteCommand,
+  SqliteCommandResponse,
+  SqliteCommandType,
+  SqliteDriverError
+} from './async-commands.js';
 
 class AsyncDriverStatement implements SqliteDriverStatement {
   [Symbol.dispose]: () => void = undefined as any;
@@ -48,11 +52,19 @@ class AsyncDriverStatement implements SqliteDriverStatement {
     });
   }
 
-  async step(n?: number, options?: StepOptions): Promise<SqliteStepResponse> {
+  async step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
     return this.driver._push({
       type: SqliteCommandType.step,
       id: this.id,
       n: n,
+      requireTransaction: options?.requireTransaction
+    });
+  }
+
+  async run(options?: StepOptions): Promise<SqliteRunResult> {
+    return this.driver._push({
+      type: SqliteCommandType.run,
+      id: this.id,
       requireTransaction: options?.requireTransaction
     });
   }
@@ -68,15 +80,15 @@ class AsyncDriverStatement implements SqliteDriverStatement {
     this.driver._send({
       type: SqliteCommandType.reset,
       id: this.id,
-      clear_bindings: options?.clear_bindings
+      clearBindings: options?.clearBindings
     });
   }
 }
 
 interface CommandQueueItem {
   cmd: SqliteCommand;
-  resolve?: (r: SqliteCommandResponse) => void;
-  reject?: (e: any) => void;
+  resolve?: (r: any) => void;
+  reject?: (e: SqliteDriverError) => void;
 }
 
 export interface AsyncDriverConnectionOptions {
@@ -144,7 +156,7 @@ export class AsyncDriverConnection implements SqliteDriverConnection {
   }
 
   _push<T extends SqliteCommand>(cmd: T): Promise<InferCommandResult<T>> {
-    const d = new Deferred<SqliteCommandResponse>();
+    const d = new Deferred<any>();
     this.buffer.push({ cmd, resolve: d.resolve, reject: d.reject });
     this._maybeFlush();
     return d.promise as Promise<InferCommandResult<T>>;
@@ -202,10 +214,10 @@ export class AsyncDriverConnection implements SqliteDriverConnection {
     for (let i = 0; i < commands.length; i++) {
       const c = commands[i];
       const rr = r[i];
-      if (rr.error) {
+      if (isErrorResponse(rr)) {
         c.reject?.(rr.error);
       } else if (c.resolve) {
-        c.resolve!(rr);
+        c.resolve!(rr.value);
       }
     }
   }

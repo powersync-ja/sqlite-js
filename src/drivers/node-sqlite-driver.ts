@@ -2,31 +2,36 @@ import type * as sqlite from 'node:sqlite';
 
 import { SqliteValue } from '../common.js';
 import {
-  SqliteCommandResponse,
-  InferBatchResult,
-  SqliteCommand,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
-  SqlitePrepare,
-  SqliteStepResponse,
   UpdateListener,
-  SqliteBind,
-  SqliteStep,
-  SqliteReset,
-  SqliteFinalize,
-  SqliteCommandType,
   PrepareOptions,
   ResetOptions,
   SqliteParameterBinding,
-  SqliteParseResponse,
-  SqliteParse,
   SqliteDriverStatement,
   StepOptions,
-  SqliteDriverError
+  SqliteRunResult,
+  SqliteStepResult,
+  SqliteRow
 } from '../driver-api.js';
 
 import { ReadWriteConnectionPool } from '../driver-util.js';
-import { mapError, SqliteError } from './util.js';
+import { mapError } from './util.js';
+import {
+  InferBatchResult,
+  SqliteBind,
+  SqliteCommand,
+  SqliteCommandResponse,
+  SqliteCommandType,
+  SqliteDriverError,
+  SqliteFinalize,
+  SqliteParse,
+  SqliteParseResult,
+  SqlitePrepare,
+  SqliteReset,
+  SqliteRun,
+  SqliteStep
+} from './async-commands.js';
 
 export function nodeSqlitePool(path: string): SqliteDriverConnectionPool {
   return new ReadWriteConnectionPool({
@@ -43,7 +48,8 @@ export function nodeSqlitePool(path: string): SqliteDriverConnectionPool {
 
 interface InternalStatement extends SqliteDriverStatement {
   getColumnsSync(): string[];
-  stepSync(n?: number, options?: StepOptions): SqliteStepResponse;
+  stepSync(n?: number, options?: StepOptions): SqliteStepResult;
+  runSync(options?: StepOptions): SqliteRunResult;
 
   readonly source: string;
 
@@ -68,7 +74,7 @@ class ErrorStatement implements InternalStatement {
   getColumnsSync(): string[] {
     throw this.error;
   }
-  stepSync(n?: number, options?: StepOptions): SqliteStepResponse {
+  stepSync(n?: number, options?: StepOptions): SqliteStepResult {
     throw this.error;
   }
   async getColumns(): Promise<string[]> {
@@ -77,7 +83,15 @@ class ErrorStatement implements InternalStatement {
   bind(parameters: SqliteParameterBinding): void {
     // no-op
   }
-  async step(n?: number, options?: StepOptions): Promise<SqliteStepResponse> {
+  async step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
+    throw this.error;
+  }
+
+  runSync(options?: StepOptions): SqliteRunResult {
+    throw this.error;
+  }
+
+  async run(options?: StepOptions): Promise<SqliteRunResult> {
     throw this.error;
   }
 
@@ -146,7 +160,7 @@ class NodeSqliteSyncStatement implements InternalStatement {
     }
   }
 
-  async step(n?: number, options?: StepOptions): Promise<SqliteStepResponse> {
+  async step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
     try {
       return this.stepSync(n, options);
     } catch (e) {
@@ -154,12 +168,44 @@ class NodeSqliteSyncStatement implements InternalStatement {
     }
   }
 
-  stepSync(n?: number, options?: StepOptions): SqliteStepResponse {
+  async run(options?: StepOptions): Promise<SqliteRunResult> {
+    try {
+      return this.runSync(options);
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  runSync(options?: StepOptions): SqliteRunResult {
+    if (options?.requireTransaction) {
+      // TODO: Implement
+    }
+
+    const statement = this.statement;
+    this.reset();
+
+    try {
+      const bindNamed = this.bindNamed;
+      const bindPositional = this.bindPositional;
+      const bind = [bindPositional, bindNamed].filter((b) => b != null);
+
+      statement.setReadBigInts(true);
+      const r = statement.run(...bind);
+      return {
+        changes: Number(r.changes),
+        lastInsertRowId: r.lastInsertRowid as bigint
+      };
+    } finally {
+      this.reset();
+    }
+  }
+
+  stepSync(n?: number, options?: StepOptions): SqliteStepResult {
     const all = n == null;
 
     const statement = this.statement;
     if (this.statementDone) {
-      return { skipped: true } as SqliteStepResponse;
+      return { done: true };
     }
 
     if (options?.requireTransaction) {
@@ -181,7 +227,7 @@ class NodeSqliteSyncStatement implements InternalStatement {
       iterator = statement.all(bindNamed, ...bindPositional)[Symbol.iterator]();
       this.iterator = iterator;
     }
-    let rows = [];
+    let rows: SqliteRow[] = [];
     let isDone = false;
     for (let i = 0; i < num_rows || all; i++) {
       const { value, done } = iterator.next();
@@ -189,12 +235,12 @@ class NodeSqliteSyncStatement implements InternalStatement {
         isDone = true;
         break;
       }
-      rows.push(value);
+      rows.push(value as SqliteRow);
     }
     if (isDone) {
       this.statementDone = true;
     }
-    return { rows, done: isDone } as SqliteStepResponse;
+    return { rows, done: isDone };
   }
 
   finalize(): void {
@@ -212,7 +258,7 @@ class NodeSqliteSyncStatement implements InternalStatement {
       iter.return?.();
       this.iterator = undefined;
     }
-    if (options?.clear_bindings) {
+    if (options?.clearBindings) {
       this.bindNamed = {};
       this.bindPositional = [];
     }
@@ -269,7 +315,7 @@ export class NodeSqliteConnection implements SqliteDriverConnection {
     return statement;
   }
 
-  private _prepare(command: SqlitePrepare): SqliteCommandResponse {
+  private _prepare(command: SqlitePrepare): void {
     const { id, sql } = command;
 
     const statement = this.prepare(sql, {
@@ -284,44 +330,46 @@ export class NodeSqliteConnection implements SqliteDriverConnection {
       );
     }
     this.statements.set(id, statement);
-    return {};
   }
 
-  private _parse(command: SqliteParse): SqliteParseResponse {
+  private _parse(command: SqliteParse): SqliteParseResult {
     const { id } = command;
     const statement = this.requireStatement(id);
     return { columns: statement.getColumnsSync() };
   }
 
-  private _bind(command: SqliteBind): SqliteCommandResponse {
+  private _bind(command: SqliteBind): void {
     const { id, parameters } = command;
     const statement = this.requireStatement(id);
     statement.bind(parameters);
-    return {};
   }
 
-  private _step(command: SqliteStep): SqliteStepResponse {
+  private _step(command: SqliteStep): SqliteStepResult {
     const { id, n, requireTransaction } = command;
     const statement = this.requireStatement(id);
     return statement.stepSync(n, { requireTransaction });
   }
 
-  private _reset(command: SqliteReset): SqliteCommandResponse {
-    const { id, clear_bindings } = command;
+  private _run(command: SqliteRun): SqliteRunResult {
+    const { id } = command;
     const statement = this.requireStatement(id);
-    statement.reset(command);
-    return {};
+    return statement.runSync(command);
   }
 
-  private _finalize(command: SqliteFinalize): SqliteCommandResponse {
+  private _reset(command: SqliteReset): void {
+    const { id } = command;
+    const statement = this.requireStatement(id);
+    statement.reset(command);
+  }
+
+  private _finalize(command: SqliteFinalize): void {
     const { id } = command;
     const statement = this.requireStatement(id);
     statement.finalize();
     this.statements.delete(id);
-    return {};
   }
 
-  private _executeCommand(command: SqliteCommand): SqliteCommandResponse {
+  private _executeCommand(command: SqliteCommand): any {
     switch (command.type) {
       case SqliteCommandType.prepare:
         return this._prepare(command);
@@ -329,6 +377,8 @@ export class NodeSqliteConnection implements SqliteDriverConnection {
         return this._bind(command);
       case SqliteCommandType.step:
         return this._step(command);
+      case SqliteCommandType.run:
+        return this._run(command);
       case SqliteCommandType.reset:
         return this._reset(command);
       case SqliteCommandType.finalize:
@@ -348,7 +398,7 @@ export class NodeSqliteConnection implements SqliteDriverConnection {
     for (let command of commands) {
       try {
         const result = this._executeCommand(command);
-        results.push(result);
+        results.push({ value: result });
       } catch (e: any) {
         const err = mapError(e);
         results.push({

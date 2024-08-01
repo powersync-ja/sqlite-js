@@ -22,7 +22,7 @@ import { SqliteArguments } from './common.js';
 import { Deferred } from './deferred.js';
 import {
   PrepareOptions,
-  RunResults,
+  SqliteRunResult,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
   SqliteDriverStatement,
@@ -56,7 +56,7 @@ export class ConnectionPoolImpl
     query: string,
     args?: SqliteArguments,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
-  ): Promise<RunResults> {
+  ): Promise<SqliteRunResult> {
     const r = await this.reserveConnection(options);
     try {
       return r.connection.run(query, args, options);
@@ -235,7 +235,10 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     return this.connection.close();
   }
 
-  run(query: string, args?: SqliteArguments | undefined): Promise<RunResults> {
+  run(
+    query: string,
+    args?: SqliteArguments | undefined
+  ): Promise<SqliteRunResult> {
     return this.connection.run(query, args);
   }
 
@@ -371,12 +374,12 @@ export class ConnectionImpl implements SqliteConnection {
     return new QueryPipelineImpl(this.driver);
   }
 
-  async run(query: string, args: SqliteArguments): Promise<RunResults> {
+  async run(query: string, args: SqliteArguments): Promise<SqliteRunResult> {
     await this.select(query, args);
     return await this._runResults();
   }
 
-  async _runResults(): Promise<RunResults> {
+  async _runResults(): Promise<SqliteRunResult> {
     const { changes, rowid } = await this.get(
       'select changes() as changes, last_insert_rowid() as rowid',
       undefined,
@@ -479,7 +482,7 @@ export class TransactionImpl implements SqliteTransaction {
     return this.con.pipeline();
   }
 
-  run(query: string, args: SqliteArguments): Promise<RunResults> {
+  run(query: string, args: SqliteArguments): Promise<SqliteRunResult> {
     return this.con.run(query, args);
   }
 
@@ -627,7 +630,7 @@ class ConnectionPoolPreparedQueryImpl<T extends SqliteRowObject>
     }
   }
 
-  async run(args?: SqliteArguments): Promise<RunResults> {
+  async run(args?: SqliteArguments): Promise<SqliteRunResult> {
     const r = await this.context.reserveConnection();
     try {
       const q = this.cachedQuery(r);
@@ -714,7 +717,7 @@ class ConnectionPreparedQueryImpl<T extends SqliteRowObject>
     }
   }
 
-  async run(args?: SqliteArguments): Promise<RunResults> {
+  async run(args?: SqliteArguments): Promise<SqliteRunResult> {
     try {
       if (args != null) {
         this.statement.bind(args);

@@ -1,8 +1,8 @@
 import * as sqlite from 'node:sqlite';
 import * as worker_threads from 'worker_threads';
-import { SqliteDriverError } from '../driver-api.js';
-import { NodeSqliteConnection } from './node-sqlite-driver.js';
 import { Deferred } from '../deferred.js';
+import { isErrorResponse } from './async-commands.js';
+import { NodeSqliteConnection } from './node-sqlite-driver.js';
 
 const port = worker_threads.parentPort;
 if (port != null) {
@@ -47,13 +47,13 @@ if (port != null) {
       const commands = args;
 
       const results = (await db!.execute(commands)).map((r) => {
-        const error = (r as any)?.error as SqliteDriverError | undefined;
-        if (error) {
+        if (isErrorResponse(r)) {
+          const error = r.error;
           return {
             error: {
               code: error.code,
               message: error.message,
-              stack: error.message
+              stack: error.stack
             }
           };
         } else {

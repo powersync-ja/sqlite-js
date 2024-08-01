@@ -1,112 +1,8 @@
-import { SqliteArguments, SqliteValue } from './common.js';
-
-export enum SqliteCommandType {
-  prepare = 1,
-  bind = 2,
-  step = 3,
-  reset = 4,
-  finalize = 5,
-  sync = 6,
-  parse = 7
-}
-
-export interface SqliteDriverError {
-  message: string;
-  code: string;
-  stack?: string;
-}
-
-export interface SqliteCommandResponse {
-  error?: SqliteDriverError;
-  skipped?: true;
-}
-
-export interface SqliteBaseCommand {
-  type: SqliteCommandType;
-}
-
-export interface SqlitePrepare extends SqliteBaseCommand {
-  type: SqliteCommandType.prepare;
-  id: number;
-  sql: string;
-  bigint?: boolean;
-  persist?: boolean;
-  rawResults?: boolean;
-}
-
-export interface SqliteParseResponse extends SqliteCommandResponse {
-  columns: string[];
-}
-
-export type SqliteParameterBinding =
-  | (SqliteValue | undefined)[]
-  | Record<string, SqliteValue>
-  | null
-  | undefined;
-
-export interface SqliteBind extends SqliteBaseCommand {
-  type: SqliteCommandType.bind;
-  id: number;
-  parameters: SqliteParameterBinding;
-}
-
-export interface SqliteParse extends SqliteBaseCommand {
-  type: SqliteCommandType.parse;
-  id: number;
-}
-
-export interface SqliteStep extends SqliteBaseCommand {
-  type: SqliteCommandType.step;
-  id: number;
-  n?: number;
-  requireTransaction?: boolean;
-}
+import { SqliteValue } from './common.js';
 
 export type SqliteRowRaw = SqliteValue[];
 export type SqliteRowObject = Record<string, SqliteValue>;
 export type SqliteRow = SqliteRowRaw | SqliteRowObject;
-
-export interface SqliteStepResponse extends SqliteCommandResponse {
-  rows?: SqliteRow[];
-  done?: boolean;
-}
-
-export interface SqliteReset extends SqliteBaseCommand {
-  type: SqliteCommandType.reset;
-  id: number;
-  clear_bindings?: boolean;
-}
-
-export interface SqliteFinalize extends SqliteBaseCommand {
-  type: SqliteCommandType.finalize;
-  id: number;
-}
-
-export interface SqliteSync {
-  type: SqliteCommandType.sync;
-}
-
-export type SqliteCommand =
-  | SqlitePrepare
-  | SqliteBind
-  | SqliteStep
-  | SqliteReset
-  | SqliteFinalize
-  | SqliteSync
-  | SqliteParse;
-
-export type InferCommandResult<T extends SqliteCommand> =
-  T extends SqlitePrepare
-    ? SqliteCommandResponse
-    : T extends SqliteStep
-      ? SqliteStepResponse
-      : T extends SqliteParse
-        ? SqliteParseResponse
-        : SqliteCommandResponse;
-
-export type InferBatchResult<T extends SqliteCommand[]> = {
-  [i in keyof T]: InferCommandResult<T[i]>;
-};
 
 export interface PrepareOptions {
   bigint?: boolean;
@@ -115,7 +11,7 @@ export interface PrepareOptions {
 }
 
 export interface ResetOptions {
-  clear_bindings?: boolean;
+  clearBindings?: boolean;
 }
 
 export interface SqliteDriverConnection {
@@ -134,13 +30,31 @@ export interface SqliteDriverConnection {
   close(): Promise<void>;
 }
 
+export type SqliteParameterBinding =
+  | (SqliteValue | undefined)[]
+  | Record<string, SqliteValue>
+  | null
+  | undefined;
+
+export interface SqliteStepResult {
+  rows?: SqliteRow[];
+  done?: boolean;
+}
+
 export interface SqliteDriverStatement {
   getColumns(): Promise<string[]>;
 
   bind(parameters: SqliteParameterBinding): void;
-  step(n?: number, options?: StepOptions): Promise<SqliteStepResponse>;
+  step(n?: number, options?: StepOptions): Promise<SqliteStepResult>;
   finalize(): void;
   reset(options?: ResetOptions): void;
+
+  /**
+   * Similar to step, followed by reset, and returning number of changed rows.
+   *
+   * Avoids the need to use a separate statement to get changes.
+   */
+  run(options?: StepOptions): Promise<SqliteRunResult>;
 
   [Symbol.dispose](): void;
 }
@@ -198,7 +112,7 @@ export interface ReserveConnectionOptions {
   signal?: AbortSignal;
 }
 
-export interface RunResults {
+export interface SqliteRunResult {
   changes: number;
   lastInsertRowId: bigint;
 }

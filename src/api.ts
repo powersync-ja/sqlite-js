@@ -206,14 +206,6 @@ export interface TransactionCloseEvent {
 export type TransactionCloseListener = (event: TransactionCloseEvent) => void;
 
 export interface SqliteTransaction extends QueryInterface {
-  /**
-   * Returns true if auto-commit is enabled.
-   * This means the database is not currently in a transaction.
-   * This may be true even if a transaction lock is still held,
-   * when the transaction has been committed or rolled back.
-   */
-  getAutoCommit(): Promise<boolean>;
-
   rollback(): Promise<void>;
 }
 

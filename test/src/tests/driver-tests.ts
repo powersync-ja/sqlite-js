@@ -211,7 +211,7 @@ export function describeDriverTests(
       const { rows: rows1 } = await s.step();
       s.reset();
       const { rows: rows2 } = await s.step();
-      s.reset({ clear_bindings: true });
+      s.reset({ clearBindings: true });
 
       expect(rows1).toEqual([{ one: 1, two: 2 }]);
       expect(rows2).toEqual([{ one: 1, two: 2 }]);
@@ -232,7 +232,7 @@ export function describeDriverTests(
       s.reset();
       const { rows: rows2 } = await s.step(3);
       const { rows: rows3 } = await s.step(3);
-      const { rows: rows4, skipped: skipped4 } = await s.step(3);
+      const { rows: rows4 } = await s.step(3);
       s.reset();
       const { rows: rows5 } = await s.step();
 
@@ -240,7 +240,6 @@ export function describeDriverTests(
       expect(rows2).toEqual([{ v: 1 }, { v: 2 }, { v: 3 }]);
       expect(rows3).toEqual([{ v: 4 }, { v: 5 }]);
       expect(rows4).toBe(undefined);
-      expect(skipped4).toBe(true);
       expect(rows5).toEqual([{ v: 1 }, { v: 2 }, { v: 3 }, { v: 4 }, { v: 5 }]);
     });
 
@@ -256,7 +255,7 @@ export function describeDriverTests(
         "insert into test_data(data) values('test')"
       );
       const { rows: rows1 } = await s2.step();
-      const { rows: rows2, skipped: skipped2 } = await s2.step();
+      const { rows: rows2 } = await s2.step();
       s2.reset();
       const { rows: rows3 } = await s2.step();
       using s3 = connection.prepare('select count(*) as count from test_data');
@@ -264,7 +263,6 @@ export function describeDriverTests(
 
       expect(rows1).toEqual([]);
       expect(rows2).toBe(undefined);
-      expect(skipped2).toBe(true);
       expect(rows3).toEqual([]);
       expect(rows4).toEqual([{ count: 2 }]);
     });

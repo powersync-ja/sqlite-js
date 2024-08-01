@@ -1,9 +1,7 @@
 import {
-  InferBatchResult,
   PrepareOptions,
   ReserveConnectionOptions,
   ReservedConnection,
-  SqliteCommand,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
   SqliteDriverStatement,

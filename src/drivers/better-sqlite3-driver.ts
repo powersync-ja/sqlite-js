@@ -2,31 +2,35 @@ import type * as bsqlite from 'better-sqlite3';
 import DatabaseConstructor from 'better-sqlite3';
 import { SqliteValue } from '../common.js';
 import {
-  SqliteCommandResponse,
-  InferBatchResult,
-  SqliteCommand,
-  SqliteDriverConnection,
-  SqliteDriverConnectionPool,
-  SqlitePrepare,
-  SqliteStepResponse,
-  UpdateListener,
-  SqliteBind,
-  SqliteStep,
-  SqliteReset,
-  SqliteFinalize,
-  SqliteCommandType,
   PrepareOptions,
   ResetOptions,
-  SqliteParameterBinding,
-  SqliteParseResponse,
-  SqliteParse,
+  SqliteDriverConnection,
+  SqliteDriverConnectionPool,
   SqliteDriverStatement,
+  SqliteParameterBinding,
+  SqliteRunResult,
+  SqliteStepResult,
   StepOptions,
-  SqliteDriverError
+  UpdateListener
 } from '../driver-api.js';
 
 import { ReadWriteConnectionPool } from '../driver-util.js';
 import { mapError } from './util.js';
+import {
+  InferBatchResult,
+  SqliteBind,
+  SqliteCommand,
+  SqliteCommandResponse,
+  SqliteCommandType,
+  SqliteDriverError,
+  SqliteFinalize,
+  SqliteParse,
+  SqliteParseResult,
+  SqlitePrepare,
+  SqliteReset,
+  SqliteRun,
+  SqliteStep
+} from './async-commands.js';
 
 export function betterSqlitePool(
   path: string,
@@ -44,7 +48,8 @@ export function betterSqlitePool(
 
 interface InternalStatement extends SqliteDriverStatement {
   getColumnsSync(): string[];
-  stepSync(n?: number, options?: StepOptions): SqliteStepResponse;
+  stepSync(n?: number, options?: StepOptions): SqliteStepResult;
+  runSync(options?: StepOptions): SqliteRunResult;
 
   readonly source: string;
 
@@ -69,7 +74,10 @@ class ErrorStatement implements InternalStatement {
   getColumnsSync(): string[] {
     throw this.error;
   }
-  stepSync(n?: number, options?: StepOptions): SqliteStepResponse {
+  stepSync(n?: number, options?: StepOptions): SqliteStepResult {
+    throw this.error;
+  }
+  runSync(options?: StepOptions): SqliteRunResult {
     throw this.error;
   }
   async getColumns(): Promise<string[]> {
@@ -78,7 +86,11 @@ class ErrorStatement implements InternalStatement {
   bind(parameters: SqliteParameterBinding): void {
     // no-op
   }
-  async step(n?: number, options?: StepOptions): Promise<SqliteStepResponse> {
+  async step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
+    throw this.error;
+  }
+
+  async run(options?: StepOptions): Promise<SqliteRunResult> {
     throw this.error;
   }
 
@@ -161,7 +173,7 @@ class BetterSqlitePreparedStatement implements InternalStatement {
     }
   }
 
-  async step(n?: number, options?: StepOptions): Promise<SqliteStepResponse> {
+  async step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
     try {
       return this.stepSync(n, options);
     } catch (e) {
@@ -169,12 +181,46 @@ class BetterSqlitePreparedStatement implements InternalStatement {
     }
   }
 
-  stepSync(n?: number, options?: StepOptions): SqliteStepResponse {
+  async run(options?: StepOptions): Promise<SqliteRunResult> {
+    try {
+      return this.runSync(options);
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  runSync(options?: StepOptions): SqliteRunResult {
+    if (options?.requireTransaction) {
+      if (!this.statement.database.inTransaction) {
+        throw new Error('Transaction has been rolled back');
+      }
+    }
+
+    const statement = this.statement;
+    this.reset();
+
+    try {
+      const bindNamed = this.bindNamed;
+      const bindPositional = this.bindPositional;
+      const bind = [bindPositional, bindNamed].filter((b) => b != null);
+
+      statement.safeIntegers(true);
+      const r = statement.run(...bind);
+      return {
+        changes: r.changes,
+        lastInsertRowId: r.lastInsertRowid as bigint
+      };
+    } finally {
+      this.reset();
+    }
+  }
+
+  stepSync(n?: number, options?: StepOptions): SqliteStepResult {
     const all = n == null;
 
     const statement = this.statement;
     if (this.statementDone) {
-      return { skipped: true } as SqliteStepResponse;
+      return { done: true } as SqliteStepResult;
     }
 
     if (options?.requireTransaction) {
@@ -189,17 +235,13 @@ class BetterSqlitePreparedStatement implements InternalStatement {
     if (!statement.reader) {
       statement.run(...bind);
       this.statementDone = true;
-      return { rows: [], done: true } as SqliteStepResponse;
+      return { rows: [], done: true } as SqliteStepResult;
     }
     let iterator = this.iterator;
     const num_rows = n ?? 1;
     if (iterator == null) {
-      if (this.options.rawResults) {
-        statement.raw();
-      }
-      if (this.options.bigint) {
-        statement.safeIntegers();
-      }
+      statement.raw(this.options.rawResults ?? false);
+      statement.safeIntegers(this.options.bigint ?? false);
       iterator = statement.iterate(...bind);
       this.iterator = iterator;
     }
@@ -216,7 +258,7 @@ class BetterSqlitePreparedStatement implements InternalStatement {
     if (isDone) {
       this.statementDone = true;
     }
-    return { rows, done: isDone } as SqliteStepResponse;
+    return { rows, done: isDone } as SqliteStepResult;
   }
 
   finalize(): void {
@@ -234,7 +276,7 @@ class BetterSqlitePreparedStatement implements InternalStatement {
       iter.return!();
       this.iterator = undefined;
     }
-    if (options?.clear_bindings) {
+    if (options?.clearBindings) {
       this.bindNamed = {};
       this.bindPositional = [];
     }
@@ -282,7 +324,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     return statement;
   }
 
-  private _prepare(command: SqlitePrepare): SqliteCommandResponse {
+  private _prepare(command: SqlitePrepare) {
     const { id, sql } = command;
     const statement = this.prepare(sql, {
       bigint: command.bigint,
@@ -296,44 +338,49 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
       );
     }
     this.statements.set(id, statement);
-    return {};
   }
 
-  private _parse(command: SqliteParse): SqliteParseResponse {
+  private _parse(command: SqliteParse): SqliteParseResult {
     const { id } = command;
     const statement = this.requireStatement(id);
     return { columns: statement.getColumnsSync() };
   }
 
-  private _bind(command: SqliteBind): SqliteCommandResponse {
+  private _bind(command: SqliteBind): void {
     const { id, parameters } = command;
     const statement = this.requireStatement(id);
     statement.bind(parameters);
-    return {};
   }
 
-  private _step(command: SqliteStep): SqliteStepResponse {
+  private _step(command: SqliteStep): SqliteStepResult {
     const { id, n, requireTransaction } = command;
     const statement = this.requireStatement(id);
     return statement.stepSync(n, { requireTransaction });
   }
 
-  private _reset(command: SqliteReset): SqliteCommandResponse {
-    const { id, clear_bindings } = command;
+  private _run(command: SqliteRun): SqliteRunResult {
+    const { id, requireTransaction } = command;
     const statement = this.requireStatement(id);
-    statement.reset(command);
-    return {};
+    return statement.runSync({ requireTransaction });
   }
 
-  private _finalize(command: SqliteFinalize): SqliteCommandResponse {
+  private _reset(command: SqliteReset): void {
     const { id } = command;
     const statement = this.requireStatement(id);
-    statement.finalize();
-    this.statements.delete(id);
-    return {};
+    statement.reset(command);
   }
 
-  private _executeCommand(command: SqliteCommand): SqliteCommandResponse {
+  private _finalize(command: SqliteFinalize): void {
+    const { id } = command;
+
+    const statement = this.statements.get(id);
+    if (statement != null) {
+      statement.finalize();
+      this.statements.delete(id);
+    }
+  }
+
+  private _executeCommand(command: SqliteCommand): any {
     switch (command.type) {
       case SqliteCommandType.prepare:
         return this._prepare(command);
@@ -341,6 +388,8 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
         return this._bind(command);
       case SqliteCommandType.step:
         return this._step(command);
+      case SqliteCommandType.run:
+        return this._run(command);
       case SqliteCommandType.reset:
         return this._reset(command);
       case SqliteCommandType.finalize:
@@ -360,7 +409,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     for (let command of commands) {
       try {
         const result = this._executeCommand(command);
-        results.push(result);
+        results.push({ value: result });
       } catch (e: any) {
         results.push({
           error: mapError(e)

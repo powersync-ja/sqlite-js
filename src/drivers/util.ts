@@ -1,4 +1,4 @@
-import { SqliteDriverError } from '../driver-api.js';
+import { SqliteDriverError } from './async-commands.js';
 
 export function mapError(error: unknown): SqliteError {
   const e = error as any;
