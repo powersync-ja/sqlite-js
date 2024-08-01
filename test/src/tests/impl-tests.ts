@@ -75,20 +75,20 @@ export function describeImplTests(
     test('insert returning', async () => {
       await using db = await open();
       await using connection = await db.reserveConnection();
-      await connection.execute(
+      await connection.select(
         'create table test_data(id integer primary key, data text)'
       );
-      const results = await connection.execute(
+      const results = await connection.select(
         'insert into test_data(data) values(123) returning id'
       );
 
-      expect(results.rows).toEqual([{ id: 1 }]);
+      expect(results).toEqual([{ id: 1 }]);
     });
 
     test('run', async () => {
       await using db = await open();
       await using connection = await db.reserveConnection();
-      await connection.execute(
+      await connection.run(
         'create table test_data(id integer primary key, data text)'
       );
       const results = await connection.run(

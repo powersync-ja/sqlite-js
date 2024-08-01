@@ -62,43 +62,23 @@ export interface ReservedSqliteConnection extends SqliteConnection {
 }
 
 export interface QueryInterface {
-  query<T extends SqliteRowObject>(
-    query: string,
-    args?: SqliteArguments,
-    options?: ReserveConnectionOptions
-  ): SqliteQuery<T>;
-
   prepare<T extends SqliteRowObject>(
     query: string,
-    args?: SqliteArguments
+    args?: SqliteArguments,
+    options?: QueryOptions
   ): PreparedQuery<T>;
 
-  /**
-   * When called on a connection pool, uses readonly: false by default.
-   */
   run(
     query: string,
     args?: SqliteArguments,
     options?: ReserveConnectionOptions
   ): Promise<RunResults>;
 
-  /**
-   * When called on a connection pool, uses readonly: false by default.
-   */
-  execute<T extends SqliteRowObject>(
-    query: string,
-    args?: SqliteArguments,
-    options?: QueryOptions & ReserveConnectionOptions
-  ): Promise<ResultSet<T>>;
-
-  /**
-   * Convenience method, same as query(query, args).executeStreamed(options).
-   */
-  executeStreamed<T extends SqliteRowObject>(
+  stream<T extends SqliteRowObject>(
     query: string,
     args: SqliteArguments,
-    options?: StreamedExecuteOptions & ReserveConnectionOptions
-  ): AsyncGenerator<ResultSet<T>>;
+    options?: StreamOptions & ReserveConnectionOptions
+  ): AsyncGenerator<T[]>;
 
   /**
    * Convenience method, same as query(query, args).select(options).
@@ -265,62 +245,25 @@ export interface RunResults {
   lastInsertRowId: bigint;
 }
 
-export interface ResultSet<T extends SqliteRowObject = SqliteRowObject> {
-  columns: (keyof T)[];
-  cells: SqliteValue[][];
-
-  /**
-   * Convenience method to combine columns and rows into objects.
-   */
-  rows: T[];
-}
-
-export interface SqliteQuery<T extends SqliteRowObject> {
-  executeStreamed(options?: StreamedExecuteOptions): AsyncGenerator<ResultSet>;
-
-  execute(options?: QueryOptions): Promise<ResultSet<T>>;
-
-  /**
-   * Convenience method.
-   *
-   * Same as execute, but returns an array of row objects directly.
-   */
-  select(options?: QueryOptions): Promise<T[]>;
-
-  /**
-   * Get a single row.
-   *
-   * Throws an exception if the results contain no rows.
-   */
-  get(options?: QueryOptions): Promise<T>;
-
-  /**
-   * Get a single row.
-   *
-   * Returns null if the results contain no rows.
-   */
-  getOptional(options?: QueryOptions): Promise<T | null>;
-}
-
 export interface PreparedQuery<T extends SqliteRowObject> {
   parse(): Promise<{ columns: string[] }>;
 
-  executeStreamed(
-    args?: SqliteArguments,
-    options?: StreamedExecuteOptions
-  ): AsyncGenerator<ResultSet>;
-
-  execute(
-    args?: SqliteArguments,
-    options?: QueryOptions
-  ): Promise<ResultSet<T>>;
+  /**
+   * Run the statement and stream results back.
+   *
+   * @param options.chunkSize size of each chunk to stream
+   */
+  stream(args?: SqliteArguments, options?: StreamOptions): AsyncGenerator<T[]>;
 
   /**
-   * Convenience method.
-   *
-   * Same as execute, but returns an array of row objects directly.
+   * Returns an array of rows.
    */
-  select(args?: SqliteArguments, options?: QueryOptions): Promise<T[]>;
+  select(args?: SqliteArguments): Promise<T[]>;
+
+  /**
+   * Run the statement and return the number of changes.
+   */
+  run(args?: SqliteArguments): Promise<RunResults>;
 
   dispose(): void;
   [Symbol.dispose](): void;
@@ -331,7 +274,7 @@ export interface QueryOptions {
   bigint?: boolean;
 }
 
-export interface StreamedExecuteOptions extends QueryOptions {
+export interface StreamOptions extends QueryOptions {
   /** Size limit in bytes for each chunk */
   chunkSize?: number;
 }
@@ -340,7 +283,7 @@ export interface QueryPipeline {
   /**
    * Enqueue a query.
    */
-  execute(query: string | PreparedQuery<any>, args?: SqliteArguments): void;
+  run(query: string | PreparedQuery<any>, args?: SqliteArguments): void;
 
   /**
    * Flush all existing queries, wait for the last query to complete.
