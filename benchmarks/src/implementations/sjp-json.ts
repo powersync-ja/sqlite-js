@@ -35,17 +35,17 @@ export class JSPJsonImpl extends Benchmark {
 
     await using c = await db.reserveConnection();
 
-    await c.execute(
+    await c.run(
       'CREATE TABLE t1(id INTEGER PRIMARY KEY, a INTEGER, b INTEGER, c TEXT)'
     );
-    await c.execute(
+    await c.run(
       'CREATE TABLE t2(id INTEGER PRIMARY KEY, a INTEGER, b INTEGER, c TEXT)'
     );
-    await c.execute(
+    await c.run(
       'CREATE TABLE t3(id INTEGER PRIMARY KEY, a INTEGER, b INTEGER, c TEXT)'
     );
-    await c.execute('CREATE INDEX i3a ON t3(a)');
-    await c.execute('CREATE INDEX i3b ON t3(b)');
+    await c.run('CREATE INDEX i3a ON t3(a)');
+    await c.run('CREATE INDEX i3b ON t3(b)');
 
     let promises = [];
     for (let i = 0; i < 10; i++) {
@@ -70,9 +70,9 @@ export class JSPJsonImpl extends Benchmark {
 
     for (let i = 0; i < 1000; i++) {
       const n = this.random.nextInt(0, 100000);
-      await s.execute([i + 1, n, numberName(n)]);
+      await s.run([i + 1, n, numberName(n)]);
     }
-    await db.execute('PRAGMA wal_checkpoint(RESTART)');
+    await db.run('PRAGMA wal_checkpoint(RESTART)');
     const total = (
       await db.select<{ count: number }>('select count() as count from t1')
     )[0];
@@ -93,13 +93,13 @@ export class JSPJsonImpl extends Benchmark {
         buffer.push([i + 1, n, numberName(n)]);
 
         if (buffer.length >= 100) {
-          await s.execute([JSON.stringify(buffer)]);
+          await s.run([JSON.stringify(buffer)]);
           buffer = [];
         }
       }
-      await s.execute([JSON.stringify(buffer)]);
+      await s.run([JSON.stringify(buffer)]);
     });
-    await db.execute('PRAGMA wal_checkpoint(RESTART)');
+    await db.run('PRAGMA wal_checkpoint(RESTART)');
     const total = (
       await db.select<{ count: number }>('select count() as count from t2')
     )[0];
@@ -119,13 +119,13 @@ export class JSPJsonImpl extends Benchmark {
         const n = this.random.nextInt(0, 100000);
         buffer.push([i + 1, n, numberName(n)]);
         if (buffer.length >= 100) {
-          await s.execute([JSON.stringify(buffer)]);
+          await s.run([JSON.stringify(buffer)]);
           buffer = [];
         }
       }
-      await s.execute([JSON.stringify(buffer)]);
+      await s.run([JSON.stringify(buffer)]);
     });
-    await db.execute('PRAGMA wal_checkpoint(RESTART)');
+    await db.run('PRAGMA wal_checkpoint(RESTART)');
   }
 
   // Test 4: 100 SELECTs without an index
@@ -203,10 +203,10 @@ export class JSPJsonImpl extends Benchmark {
     await db.transaction(async (tx) => {
       using s = tx.prepare('UPDATE t1 SET b=b*2 WHERE a>=? AND a<?');
       for (let i = 0; i < 1000; i++) {
-        await s.execute([i * 10, i * 10 + 10]);
+        await s.run([i * 10, i * 10 + 10]);
       }
     });
-    await db.execute('PRAGMA wal_checkpoint(RESTART)');
+    await db.run('PRAGMA wal_checkpoint(RESTART)');
   }
 
   // Test 9: 25000 UPDATEs with an index
@@ -221,13 +221,13 @@ export class JSPJsonImpl extends Benchmark {
         const n = this.random.nextInt(0, 100000);
         batch.push([i + 1, n]);
         if (batch.length >= 100) {
-          await s.execute([JSON.stringify(batch)]);
+          await s.run([JSON.stringify(batch)]);
           batch = [];
         }
       }
-      await s.execute([JSON.stringify(batch)]);
+      await s.run([JSON.stringify(batch)]);
     });
-    await db.execute('PRAGMA wal_checkpoint(RESTART)');
+    await db.run('PRAGMA wal_checkpoint(RESTART)');
   }
 
   // Test 10: 25000 text UPDATEs with an index
@@ -243,44 +243,44 @@ export class JSPJsonImpl extends Benchmark {
         const n = this.random.nextInt(0, 100000);
         batch.push([i + 1, numberName(n)]);
         if (batch.length >= 100) {
-          await s.execute([JSON.stringify(batch)]);
+          await s.run([JSON.stringify(batch)]);
           batch = [];
         }
       }
-      await s.execute([JSON.stringify(batch)]);
+      await s.run([JSON.stringify(batch)]);
     });
-    await db.execute('PRAGMA wal_checkpoint(RESTART)');
+    await db.run('PRAGMA wal_checkpoint(RESTART)');
   }
 
   // Test 11: INSERTs from a SELECT
   async test11(): Promise<void> {
     await using db = await this.db.reserveConnection();
     await db.transaction(async (tx) => {
-      await tx.execute('INSERT INTO t1(a, b, c) SELECT b,a,c FROM t3');
-      await tx.execute('INSERT INTO t3(a, b, c) SELECT b,a,c FROM t1');
+      await tx.run('INSERT INTO t1(a, b, c) SELECT b,a,c FROM t3');
+      await tx.run('INSERT INTO t3(a, b, c) SELECT b,a,c FROM t1');
     });
-    await db.execute('PRAGMA wal_checkpoint(RESTART)');
+    await db.run('PRAGMA wal_checkpoint(RESTART)');
   }
 
   // Test 12: DELETE without an index
   async test12(): Promise<void> {
     await using db = await this.db.reserveConnection();
-    await db.execute("DELETE FROM t3 WHERE c LIKE '%fifty%'");
-    await db.execute('PRAGMA wal_checkpoint(RESTART)');
+    await db.run("DELETE FROM t3 WHERE c LIKE '%fifty%'");
+    await db.run('PRAGMA wal_checkpoint(RESTART)');
   }
 
   // Test 13: DELETE with an index
   async test13(): Promise<void> {
     await using db = await this.db.reserveConnection();
-    await db.execute('DELETE FROM t3 WHERE a>10 AND a<20000');
-    await db.execute('PRAGMA wal_checkpoint(RESTART)');
+    await db.run('DELETE FROM t3 WHERE a>10 AND a<20000');
+    await db.run('PRAGMA wal_checkpoint(RESTART)');
   }
 
   // Test 14: A big INSERT after a big DELETE
   async test14(): Promise<void> {
     await using db = await this.db.reserveConnection();
-    await db.execute('INSERT INTO t3(a, b, c) SELECT a, b, c FROM t1');
-    await db.execute('PRAGMA wal_checkpoint(RESTART)');
+    await db.run('INSERT INTO t3(a, b, c) SELECT a, b, c FROM t1');
+    await db.run('PRAGMA wal_checkpoint(RESTART)');
   }
 
   // Test 15: A big DELETE followed by many small INSERTs
@@ -290,19 +290,19 @@ export class JSPJsonImpl extends Benchmark {
       using s = tx.prepare(
         'INSERT INTO t1(a, b, c) SELECT value ->> 0, value ->> 1, value ->> 2 FROM json_each(?)'
       );
-      await tx.execute('DELETE FROM t1');
+      await tx.run('DELETE FROM t1');
       let batch: any[][] = [];
       for (let i = 0; i < 12000; i++) {
         const n = this.random.nextInt(0, 100000);
         batch.push([i + 1, n, numberName(n)]);
         if (batch.length >= 100) {
-          await s.execute([JSON.stringify(batch)]);
+          await s.run([JSON.stringify(batch)]);
           batch = [];
         }
       }
-      await s.execute([JSON.stringify(batch)]);
+      await s.run([JSON.stringify(batch)]);
     });
-    await db.execute('PRAGMA wal_checkpoint(RESTART)');
+    await db.run('PRAGMA wal_checkpoint(RESTART)');
   }
 
   // Test 16: Clear table
@@ -322,9 +322,9 @@ export class JSPJsonImpl extends Benchmark {
     assert(row3.count > 34000);
     assert(row3.count < 36000);
 
-    await db.execute('DELETE FROM t1');
-    await db.execute('DELETE FROM t2');
-    await db.execute('DELETE FROM t3');
-    await db.execute('PRAGMA wal_checkpoint(RESTART)');
+    await db.run('DELETE FROM t1');
+    await db.run('DELETE FROM t2');
+    await db.run('DELETE FROM t3');
+    await db.run('PRAGMA wal_checkpoint(RESTART)');
   }
 }
