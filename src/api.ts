@@ -74,14 +74,21 @@ export interface QueryInterface {
   ): PreparedQuery<T>;
 
   /**
-   * Convenience method, same as query(query, args).execute(options).
-   *
+   * When called on a connection pool, uses readonly: false by default.
+   */
+  run(
+    query: string,
+    args?: SqliteArguments,
+    options?: ReserveConnectionOptions
+  ): Promise<RunResults>;
+
+  /**
    * When called on a connection pool, uses readonly: false by default.
    */
   execute<T extends SqliteRowObject>(
     query: string,
     args?: SqliteArguments,
-    options?: ExecuteOptions & ReserveConnectionOptions
+    options?: QueryOptions & ReserveConnectionOptions
   ): Promise<ResultSet<T>>;
 
   /**
@@ -253,10 +260,12 @@ export interface TransactionOptions {
   type?: 'exclusive' | 'immediate' | 'deferred';
 }
 
-export interface ResultSet<T extends SqliteRowObject = SqliteRowObject> {
-  rowId?: number;
-  changes?: number;
+export interface RunResults {
+  changes: number;
+  lastInsertRowId: bigint;
+}
 
+export interface ResultSet<T extends SqliteRowObject = SqliteRowObject> {
   columns: (keyof T)[];
   cells: SqliteValue[][];
 
@@ -269,7 +278,7 @@ export interface ResultSet<T extends SqliteRowObject = SqliteRowObject> {
 export interface SqliteQuery<T extends SqliteRowObject> {
   executeStreamed(options?: StreamedExecuteOptions): AsyncGenerator<ResultSet>;
 
-  execute(options?: ExecuteOptions): Promise<ResultSet<T>>;
+  execute(options?: QueryOptions): Promise<ResultSet<T>>;
 
   /**
    * Convenience method.
@@ -303,7 +312,7 @@ export interface PreparedQuery<T extends SqliteRowObject> {
 
   execute(
     args?: SqliteArguments,
-    options?: ExecuteOptions
+    options?: QueryOptions
   ): Promise<ResultSet<T>>;
 
   /**
@@ -322,12 +331,7 @@ export interface QueryOptions {
   bigint?: boolean;
 }
 
-export interface ExecuteOptions extends QueryOptions {
-  includeRowId?: boolean;
-  includeChanges?: boolean;
-}
-
-export interface StreamedExecuteOptions extends ExecuteOptions {
+export interface StreamedExecuteOptions extends QueryOptions {
   /** Size limit in bytes for each chunk */
   chunkSize?: number;
 }

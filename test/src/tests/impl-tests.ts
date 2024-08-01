@@ -85,51 +85,27 @@ export function describeImplTests(
       expect(results.rows).toEqual([{ id: 1 }]);
     });
 
-    test('runWithResults', async () => {
+    test('run', async () => {
       await using db = await open();
       await using connection = await db.reserveConnection();
       await connection.execute(
         'create table test_data(id integer primary key, data text)'
       );
-      const results = await connection.execute(
-        'insert into test_data(data) values(123)',
-        undefined,
-        { includeChanges: true, includeRowId: true }
+      const results = await connection.run(
+        'insert into test_data(data) values(123)'
       );
 
-      expect(results.rows).toEqual([]);
       expect(results.changes).toEqual(1);
-      expect(results.rowId).toEqual(1);
+      expect(results.lastInsertRowId).toEqual(1n);
     });
 
-    test('runWithResults - returning statement', async () => {
+    test('run - select', async () => {
       await using db = await open();
       await using connection = await db.reserveConnection();
-      await connection.execute(
-        'create table test_data(id integer primary key, data text)'
-      );
-      const results = await connection.execute(
-        'insert into test_data(data) values(123) returning id',
-        undefined,
-        { includeChanges: true, includeRowId: true }
-      );
+      const results = await connection.run('select 1 as one');
 
-      expect(results.rows).toEqual([{ id: 1 }]);
-      expect(results.changes).toEqual(1);
-      expect(results.rowId).toEqual(1);
-    });
-
-    test('runWithResults - select', async () => {
-      await using db = await open();
-      await using connection = await db.reserveConnection();
-      const results = await connection.execute('select 1 as one', undefined, {
-        includeChanges: true,
-        includeRowId: true
-      });
-
-      expect(results.rows).toEqual([{ one: 1 }]);
       expect(results.changes).toEqual(0);
-      expect(results.rowId).toEqual(0);
+      expect(results.lastInsertRowId).toEqual(0n);
     });
 
     test('transaction', async () => {
@@ -186,7 +162,7 @@ export function describeImplTests(
       }
     });
 
-    test('error when not using asyncDispose after begin', async () => {
+    test('begin - error when not using asyncDispose', async () => {
       await using db = await open();
       const tx = await db.begin();
       try {
