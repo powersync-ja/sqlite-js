@@ -1,0 +1,28 @@
+{
+  "name": "@powersync/sqlite-js-better-sqlite3",
+  "version": "0.0.1",
+  "description": "",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest"
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./sync-driver": "./lib/sync-driver.js",
+    "./worker-driver": "./lib/worker-driver.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.1.2",
+    "@powersync/sqlite-js-driver": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^22.3.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5",
+    "@powersync/sqlite-js-driver-tests": "workspace:^"
+  }
+}

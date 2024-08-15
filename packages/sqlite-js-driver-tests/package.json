@@ -1,0 +1,27 @@
+{
+  "name": "@powersync/sqlite-js-driver-tests",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.js",
+    "./test": "./lib/test.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "tsc -b ./test/tsconfig.json && mocha"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "vitest": "^2.0.5",
+    "mocha": "^10.7.3",
+    "@powersync/sqlite-js-driver": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^22.3.0",
+    "typescript": "^5.5.4"
+  }
+}

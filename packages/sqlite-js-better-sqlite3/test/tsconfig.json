@@ -3,9 +3,9 @@
     "lib": ["ES2022", "esnext.disposable", "DOM"],
     "target": "ES2022",
     "strict": true,
-    "module": "Node16",
+    "module": "NodeNext",
     "outDir": "lib",
-    "noEmit": true
+    "noEmit": false
   },
   "include": ["src"]
 }

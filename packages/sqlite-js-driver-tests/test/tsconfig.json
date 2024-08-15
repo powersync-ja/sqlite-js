@@ -4,8 +4,11 @@
     "target": "ES2022",
     "strict": true,
     "module": "Node16",
+    "moduleResolution": "Node16",
     "outDir": "lib",
-    "noEmit": true
+    "noEmit": false,
+    "rootDir": "src",
+    "composite": true
   },
   "include": ["src"]
 }

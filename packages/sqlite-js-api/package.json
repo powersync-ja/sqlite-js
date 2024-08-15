@@ -1,0 +1,26 @@
+{
+  "name": "@powersync/sqlite-js-api",
+  "version": "0.0.1",
+  "description": "",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest"
+  },
+  "exports": {
+    ".": "./lib/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@powersync/sqlite-js-driver": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^22.3.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5",
+    "@powersync/sqlite-js-better-sqlite3": "workspace:^",
+    "@powersync/sqlite-js-driver-tests": "workspace:^"
+  }
+}
