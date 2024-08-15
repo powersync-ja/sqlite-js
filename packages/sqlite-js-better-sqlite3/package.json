@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b",
-    "test": "vitest"
+    "test": "pnpm build && vitest"
   },
   "exports": {
     ".": "./lib/index.js",

@@ -1,15 +1,4 @@
 {
-  "compilerOptions": {
-    "composite": true,
-    "lib": ["ES2022", "esnext.disposable"],
-    "target": "ES2022",
-    "strict": true,
-    "module": "Node16",
-    "moduleResolution": "Node16",
-    "outDir": "lib",
-    "rootDir": "src",
-    "sourceMap": true,
-    "declaration": true
-  },
+  "extends": "../../tsconfig.base.json",
   "include": ["src"]
 }

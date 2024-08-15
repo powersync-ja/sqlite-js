@@ -1,14 +1,10 @@
 {
   "scripts": {
-    "test": "tsc -b ./test/tsconfig.json && mocha",
-    "format": "prettier . --write",
-    "build": "tsc -b"
+    "build": "pnpm run -r build",
+    "test": "CI=1 pnpm run -r test",
+    "format": "prettier . --write"
   },
-  "dependencies": {
-    "better-sqlite3": "^9.5.0",
-    "event-iterator": "^2.0.0",
-    "sqlite3": "^5.1.7"
-  },
+  "dependencies": {},
   "type": "module",
   "main": "./lib/index.js",
   "module": "./lib/index.js",
