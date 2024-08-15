@@ -116,3 +116,8 @@ export function isErrorResponse(
 ): response is SqliteErrorResponse {
   return (response as SqliteErrorResponse).error != null;
 }
+
+export interface WorkerDriver {
+  execute(commands: SqliteCommand[]): Promise<SqliteCommandResponse[]>;
+  close(): Promise<void>;
+}

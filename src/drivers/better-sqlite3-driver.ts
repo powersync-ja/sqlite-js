@@ -38,7 +38,7 @@ export function betterSqlitePool(
 ): SqliteDriverConnectionPool {
   return new ReadWriteConnectionPool({
     async openConnection(options) {
-      return new BetterSqliteConnection(path, {
+      return BetterSqliteConnection.open(path, {
         ...poolOptions,
         readonly: (poolOptions?.readonly ?? options?.readonly) || false
       });
@@ -286,12 +286,17 @@ class BetterSqlitePreparedStatement implements InternalStatement {
 
 export class BetterSqliteConnection implements SqliteDriverConnection {
   con: bsqlite.Database;
-  statements = new Map<number, InternalStatement>();
+  private statements = new Map<number, InternalStatement>();
 
-  constructor(path: string, options?: bsqlite.Options) {
-    this.con = new DatabaseConstructor(path, options);
-    this.con.exec('PRAGMA journal_mode = WAL');
-    this.con.exec('PRAGMA synchronous = normal');
+  static open(path: string, options?: bsqlite.Options): BetterSqliteConnection {
+    const con = new DatabaseConstructor(path, options);
+    con.exec('PRAGMA journal_mode = WAL');
+    con.exec('PRAGMA synchronous = normal');
+    return new BetterSqliteConnection(con);
+  }
+
+  constructor(con: bsqlite.Database) {
+    this.con = con;
   }
 
   async close() {
