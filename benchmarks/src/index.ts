@@ -1,10 +1,10 @@
 import {
-  ConnectionPoolImpl,
-  betterSqliteAsyncPool,
-  betterSqlitePool,
   nodeSqliteAsyncPool,
   nodeSqlitePool
-} from '../../lib/index.js';
+} from '@powersync/sqlite-js-driver/node';
+import { ConnectionPoolImpl } from '@powersync/sqlite-js-api';
+import { betterSqliteAsyncPool } from '@powersync/sqlite-js-better-sqlite3';
+import { betterSqlitePool } from '@powersync/sqlite-js-better-sqlite3/sync-driver';
 import { Benchmark } from './Benchmark.js';
 import { BenchmarkResults } from './BenchmarkResults.js';
 import { BetterSqlite3Impl } from './implementations/better-sqlite3.js';

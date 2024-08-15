@@ -5,6 +5,7 @@ import Prando from 'prando';
 import { Benchmark } from '../Benchmark.js';
 import { numberName } from '../util.js';
 
+//@ts-ignore
 import * as sqlite from 'node:sqlite';
 
 export class NodeSqliteImpl extends Benchmark {

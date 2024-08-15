@@ -3,3 +3,4 @@ test-db/
 *.db
 lib/
 tsconfig.tsbuildinfo
+benchmarks/db

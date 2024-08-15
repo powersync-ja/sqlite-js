@@ -7,16 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      better-sqlite3:
-        specifier: ^9.5.0
-        version: 9.6.0
-      event-iterator:
-        specifier: ^2.0.0
-        version: 2.0.0
-      sqlite3:
-        specifier: ^5.1.7
-        version: 5.1.7
     devDependencies:
       '@types/better-sqlite3':
         specifier: ^7.6.9
@@ -51,6 +41,15 @@ importers:
 
   benchmarks:
     dependencies:
+      '@powersync/sqlite-js-api':
+        specifier: workspace:^
+        version: link:../packages/sqlite-js-api
+      '@powersync/sqlite-js-better-sqlite3':
+        specifier: workspace:^
+        version: link:../packages/sqlite-js-better-sqlite3
+      '@powersync/sqlite-js-driver':
+        specifier: workspace:^
+        version: link:../packages/sqlite-js-driver
       better-sqlite3:
         specifier: ^11.0.0
         version: 11.1.2
@@ -89,6 +88,9 @@ importers:
       typescript:
         specifier: ^5.5.4
         version: 5.5.4
+      vitest:
+        specifier: ^2.0.5
+        version: 2.0.5(@types/node@22.3.0)
 
   packages/sqlite-js-better-sqlite3:
     dependencies:
@@ -741,9 +743,6 @@ packages:
   better-sqlite3@11.1.2:
     resolution: {integrity: sha512-gujtFwavWU4MSPT+h9B+4pkvZdyOUkH54zgLdIrMmmmd4ZqiBIrRNBzNzYVFO417xo882uP5HBu4GjOfaSrIQw==}
 
-  better-sqlite3@9.6.0:
-    resolution: {integrity: sha512-yR5HATnqeYNVnkaUTf4bOP2dJSnyhP4puJN/QPRyx4YkBEEUxib422n2XzPqDEHjQQqazoYoADdAm5vE15+dAQ==}
-
   binary-extensions@2.3.0:
     resolution: {integrity: sha512-Ceh+7ox5qe7LJuLHoY0feh3pHuUDHAcRUeyL2VYghZwfpkNIy/+8Ocg0a3UuSoYzavmylwuLWQOf3hl0jjMMIw==}
     engines: {node: '>=8'}
@@ -952,9 +951,6 @@ packages:
 
   estree-walker@3.0.3:
     resolution: {integrity: sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g==}
-
-  event-iterator@2.0.0:
-    resolution: {integrity: sha512-KGft0ldl31BZVV//jj+IAIGCxkvvUkkON+ScH6zfoX+l+omX6001ggyRSpI0Io2Hlro0ThXotswCtfzS8UkIiQ==}
 
   execa@8.0.1:
     resolution: {integrity: sha512-VyhnebXciFV2DESc+p6B+y0LjSm0krU4OgJN44qFAhBY0TJ+1V61tYD2+wHusZ6F9n5K+vl8k0sTy7PEfV4qpg==}
@@ -2265,11 +2261,6 @@ snapshots:
       bindings: 1.5.0
       prebuild-install: 7.1.2
 
-  better-sqlite3@9.6.0:
-    dependencies:
-      bindings: 1.5.0
-      prebuild-install: 7.1.2
-
   binary-extensions@2.3.0: {}
 
   bindings@1.5.0:
@@ -2536,8 +2527,6 @@ snapshots:
   estree-walker@3.0.3:
     dependencies:
       '@types/estree': 1.0.5
-
-  event-iterator@2.0.0: {}
 
   execa@8.0.1:
     dependencies:

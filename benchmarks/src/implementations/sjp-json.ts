@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import assert from 'node:assert';
 import { join } from 'path';
 import Prando from 'prando';
-import { SqliteConnectionPool } from '../../../lib/index.js';
+import { SqliteConnectionPool } from '@powersync/sqlite-js-api';
 import { Benchmark } from '../Benchmark.js';
 import { numberName } from '../util.js';
 
