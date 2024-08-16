@@ -6,7 +6,7 @@ export function nodeSqliteAsyncPool(path: string): SqliteDriverConnectionPool {
   return new ReadWriteConnectionPool({
     async openConnection(options) {
       const con = new WorkerDriverConnection(
-        new URL(import.meta.resolve('./node-sqlite-worker.js')),
+        new URL('./node-sqlite-worker.js', import.meta.url),
         path,
         {
           readonly: options?.readonly ?? false,
