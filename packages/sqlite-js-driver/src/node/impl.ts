@@ -40,7 +40,7 @@ export function nodeSqlitePool(path: string): SqliteDriverConnectionPool {
       const db = new sqlite.DatabaseSync(path);
       return new NodeSqliteConnection(db, {
         readonly: options?.readonly,
-        name: options?.name
+        name: options?.connectionName
       });
     }
   });

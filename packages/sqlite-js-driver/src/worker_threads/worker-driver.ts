@@ -23,7 +23,7 @@ import {
 } from './async-commands.js';
 
 export interface WorkerDriverConnectionOptions {
-  name?: string;
+  connectionName?: string;
   readonly?: boolean;
   workerOptions?: worker_threads.WorkerOptions;
 }

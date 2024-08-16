@@ -1,4 +1,4 @@
-import { betterSqliteAsyncPool } from '../../lib/better-sqlite3-async-driver.js';
+import { betterSqliteAsyncPool } from '../../lib/worker-driver.js';
 
 import { describeDriverTests } from '@powersync/sqlite-js-driver-tests';
 

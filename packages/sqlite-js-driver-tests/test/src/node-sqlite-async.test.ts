@@ -1,8 +1,8 @@
-import { nodeSqliteAsyncPool } from '@powersync/sqlite-js-driver/node';
+import { NodeSqliteDriver } from '@powersync/sqlite-js-driver/node';
 import { describeDriverTests } from '../../lib/index.js';
 
 describeDriverTests(
   'node:sqlite worker',
   { getColumns: false, rawResults: false, allowsMissingParameters: true },
-  nodeSqliteAsyncPool
+  (path) => NodeSqliteDriver.open(path)
 );

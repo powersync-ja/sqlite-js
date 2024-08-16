@@ -5,7 +5,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "clean": "tsc -b --clean && rm -rf lib"
   },
   "exports": {
     ".": "./lib/index.js",

@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "tsc -b",
+    "clean": "tsc -b --clean && tsc -b ./test/tsconfig.json --clean && rm -rf lib test/lib",
     "test": "tsc -b ./test/tsconfig.json && NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" mocha"
   },
   "keywords": [],

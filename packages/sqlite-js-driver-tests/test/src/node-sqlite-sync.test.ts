@@ -1,13 +1,13 @@
-import { nodeSqlitePool } from '@powersync/sqlite-js-driver/node';
+import { NodeSqliteDriver } from '@powersync/sqlite-js-driver/node';
 import { describeDriverTests } from '../../lib/index.js';
 
-import { test, isMocha } from '../../lib/test.js';
+import { isMocha, test } from '../../lib/test.js';
 
 if (isMocha) {
   describeDriverTests(
     'node:sqlite direct',
     { getColumns: false, rawResults: false, allowsMissingParameters: true },
-    nodeSqlitePool
+    (path) => NodeSqliteDriver.openInProcess(path)
   );
 } else {
   test.skip('only running in mocha');

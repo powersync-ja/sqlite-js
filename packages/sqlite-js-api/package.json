@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b",
-    "test": "vitest"
+    "test": "vitest",
+    "clean": "tsc -b --clean && rm -rf lib"
   },
   "exports": {
     ".": "./lib/index.js"

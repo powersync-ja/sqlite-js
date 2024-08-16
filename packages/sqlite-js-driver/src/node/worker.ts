@@ -1,4 +1,4 @@
-import { NodeSqliteConnection } from './node-sqlite-driver.js';
+import { NodeSqliteConnection } from './impl.js';
 import { retriedOpen, setupDriverWorker } from '../worker_threads/setup.js';
 import { loadNodeSqlite } from './node-sqlite.js';
 

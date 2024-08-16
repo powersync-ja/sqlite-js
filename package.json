@@ -1,6 +1,7 @@
 {
   "scripts": {
     "build": "pnpm run -r build",
+    "clean": "pnpm run -r clean",
     "test": "CI=1 pnpm run -r test",
     "format": "prettier . --write"
   },

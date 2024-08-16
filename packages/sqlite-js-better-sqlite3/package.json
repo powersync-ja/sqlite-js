@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b",
-    "test": "pnpm build && vitest"
+    "test": "pnpm build && vitest",
+    "clean": "tsc -b --clean && tsc -b ./test/tsconfig.json --clean && rm -rf lib test/lib"
   },
   "exports": {
     ".": "./lib/index.js",
