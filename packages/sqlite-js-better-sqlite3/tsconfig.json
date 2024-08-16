@@ -1,4 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src"]
+  "compilerOptions": {
+    "outDir": "lib",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../sqlite-js-driver" },
+    { "path": "../sqlite-js-driver-tests" }
+  ]
 }

@@ -4,5 +4,6 @@
     "lib": ["ES2022", "DOM"],
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [{ "path": "../" }]
 }

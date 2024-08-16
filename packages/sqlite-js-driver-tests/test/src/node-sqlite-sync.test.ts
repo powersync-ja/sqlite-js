@@ -5,7 +5,7 @@ import { test, isMocha } from '../../lib/test.js';
 
 if (isMocha) {
   describeDriverTests(
-    'node:sqlite',
+    'node:sqlite direct',
     { getColumns: false, rawResults: false, allowsMissingParameters: true },
     nodeSqlitePool
   );

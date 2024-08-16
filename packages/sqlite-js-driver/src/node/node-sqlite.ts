@@ -21,5 +21,30 @@ export declare class StatementSync {
 }
 
 export async function loadNodeSqlite() {
-  return await import('node:sqlite' as any);
+  try {
+    return await import('node:sqlite' as any);
+  } catch (e: any) {
+    if (!isNodeVersionAtLeast('22.5.0')) {
+      throw new Error(`${e.message}\nNode >= 22.5.0 is required`);
+    }
+    if (!process.env.NODE_OPTIONS?.includes('--experimental-sqlite')) {
+      throw new Error(`${e.message}\nUse NODE_OPTIONS=--experimental-sqlite`);
+    }
+    throw e;
+  }
+}
+
+function isNodeVersionAtLeast(requiredVersion: string) {
+  const currentVersion = process.version.slice(1).split('.').map(Number);
+  const [requiredMajor, requiredMinor, requiredPatch] = requiredVersion
+    .split('.')
+    .map(Number);
+
+  return (
+    currentVersion[0] > requiredMajor ||
+    (currentVersion[0] === requiredMajor &&
+      (currentVersion[1] > requiredMinor ||
+        (currentVersion[1] === requiredMinor &&
+          currentVersion[2] >= requiredPatch)))
+  );
 }

@@ -6,11 +6,18 @@ export function nodeSqliteAsyncPool(path: string): SqliteDriverConnectionPool {
   return new ReadWriteConnectionPool({
     async openConnection(options) {
       const con = new WorkerDriverConnection(
-        import.meta.resolve('./node-sqlite-worker.js'),
+        new URL(import.meta.resolve('./node-sqlite-worker.js')),
         path,
         {
           readonly: options?.readonly ?? false,
-          name: options?.name
+          name: options?.name,
+          workerOptions: {
+            env: {
+              ...process.env,
+              NODE_OPTIONS:
+                '--experimental-sqlite --disable-warning=ExperimentalWarning'
+            }
+          }
         }
       );
 

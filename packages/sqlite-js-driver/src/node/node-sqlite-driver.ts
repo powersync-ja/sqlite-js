@@ -31,11 +31,12 @@ import {
   SqliteRun,
   SqliteStep
 } from '../worker_threads/async-commands.js';
+import { loadNodeSqlite } from './node-sqlite.js';
 
 export function nodeSqlitePool(path: string): SqliteDriverConnectionPool {
   return new ReadWriteConnectionPool({
     async openConnection(options) {
-      const sqlite = await import('node:sqlite' as any);
+      const sqlite = await loadNodeSqlite();
       const db = new sqlite.DatabaseSync(path);
       return new NodeSqliteConnection(db, {
         readonly: options?.readonly,

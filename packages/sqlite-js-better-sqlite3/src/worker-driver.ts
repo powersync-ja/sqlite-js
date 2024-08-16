@@ -11,7 +11,7 @@ export function betterSqliteAsyncPool(
   return new ReadWriteConnectionPool({
     async openConnection(options) {
       return new WorkerDriverConnection(
-        import.meta.resolve('./better-sqlite3-worker.js'),
+        new URL(import.meta.resolve('./better-sqlite3-worker.js')),
         path,
         {
           ...poolOptions,

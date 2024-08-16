@@ -18,7 +18,6 @@ import {
   InferCommandResult,
   isErrorResponse,
   SqliteCommand,
-  SqliteCommandResponse,
   SqliteCommandType,
   SqliteDriverError
 } from './async-commands.js';
@@ -26,6 +25,7 @@ import {
 export interface WorkerDriverConnectionOptions {
   name?: string;
   readonly?: boolean;
+  workerOptions?: worker_threads.WorkerOptions;
 }
 
 /**
@@ -42,11 +42,14 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
   buffer: CommandQueueItem[] = [];
 
   constructor(
-    workerPath: string,
+    workerPath: string | URL,
     path: string,
     options?: WorkerDriverConnectionOptions
   ) {
-    const worker = new worker_threads.Worker(workerPath);
+    const worker = new worker_threads.Worker(
+      workerPath,
+      options?.workerOptions
+    );
     this.post('open', { path, options });
     worker.addListener('error', (err) => {
       console.error('worker error', err);
