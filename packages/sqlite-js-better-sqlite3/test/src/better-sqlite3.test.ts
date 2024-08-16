@@ -1,8 +1,8 @@
-import { betterSqlitePool } from '../../lib/sync-driver.js';
+import { BetterSqliteDriver } from '../../lib/index.js';
 import { describeDriverTests } from '@powersync/sqlite-js-driver-tests';
 
 describeDriverTests(
   'better-sqlite3',
   { getColumns: true, rawResults: true, allowsMissingParameters: false },
-  betterSqlitePool
+  (path) => BetterSqliteDriver.openInProcess(path)
 );

@@ -9,9 +9,7 @@
     "clean": "tsc -b --clean && tsc -b ./test/tsconfig.json --clean && rm -rf lib test/lib"
   },
   "exports": {
-    ".": "./lib/index.js",
-    "./sync-driver": "./lib/sync-driver.js",
-    "./worker-driver": "./lib/worker-driver.js"
+    ".": "./lib/index.js"
   },
   "keywords": [],
   "author": "",

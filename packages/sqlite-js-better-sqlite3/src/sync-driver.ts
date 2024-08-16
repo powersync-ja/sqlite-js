@@ -34,20 +34,6 @@ import {
   SqliteStep
 } from '@powersync/sqlite-js-driver/worker_threads';
 
-export function betterSqlitePool(
-  path: string,
-  poolOptions?: bsqlite.Options
-): SqliteDriverConnectionPool {
-  return new ReadWriteConnectionPool({
-    async openConnection(options) {
-      return BetterSqliteConnection.open(path, {
-        ...poolOptions,
-        readonly: (poolOptions?.readonly ?? options?.readonly) || false
-      });
-    }
-  });
-}
-
 interface InternalStatement extends SqliteDriverStatement {
   getColumnsSync(): string[];
   stepSync(n?: number, options?: StepOptions): SqliteStepResult;

@@ -1,1 +1,1 @@
-export * from './worker-driver.js';
+export * from './driver.js';
