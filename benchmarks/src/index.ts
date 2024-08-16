@@ -1,10 +1,6 @@
-import {
-  nodeSqliteAsyncPool,
-  nodeSqlitePool
-} from '@powersync/sqlite-js-driver/node';
+import { NodeSqliteDriver } from '@powersync/sqlite-js-driver/node';
 import { ConnectionPoolImpl } from '@powersync/sqlite-js-api';
-import { betterSqliteAsyncPool } from '@powersync/sqlite-js-better-sqlite3';
-import { betterSqlitePool } from '@powersync/sqlite-js-better-sqlite3/sync-driver';
+import { BetterSqliteDriver } from '@powersync/sqlite-js-better-sqlite3';
 import { Benchmark } from './Benchmark.js';
 import { BenchmarkResults } from './BenchmarkResults.js';
 import { BetterSqlite3Impl } from './implementations/better-sqlite3.js';
@@ -20,61 +16,67 @@ async function main() {
   const results: BenchmarkResults[] = [
     await test(
       new JSPImpl('sjp-sync', dir, (path) => {
-        const db = new ConnectionPoolImpl(betterSqlitePool(path));
+        const db = new ConnectionPoolImpl(
+          BetterSqliteDriver.openInProcess(path)
+        );
         return db;
       })
     ),
     await test(
       new JSPImpl('sjp-async', dir, (path) => {
-        const db = new ConnectionPoolImpl(betterSqliteAsyncPool(path));
+        const db = new ConnectionPoolImpl(BetterSqliteDriver.open(path));
         return db;
       })
     ),
     await test(
       new JSPOptimizedImpl('sjp-sync-optimized', dir, (path) => {
-        const db = new ConnectionPoolImpl(betterSqlitePool(path));
+        const db = new ConnectionPoolImpl(
+          BetterSqliteDriver.openInProcess(path)
+        );
         return db;
       })
     ),
     await test(
       new JSPOptimizedImpl('sjp-async-optimized', dir, (path) => {
-        const db = new ConnectionPoolImpl(betterSqliteAsyncPool(path));
+        const db = new ConnectionPoolImpl(BetterSqliteDriver.open(path));
         return db;
       })
     ),
     await test(
       new JSPJsonImpl('sjp-sync-json', dir, (path) => {
-        const db = new ConnectionPoolImpl(betterSqlitePool(path));
+        const db = new ConnectionPoolImpl(
+          BetterSqliteDriver.openInProcess(path)
+        );
         return db;
       })
     ),
     await test(
       new JSPJsonImpl('sjp-async-json', dir, (path) => {
-        const db = new ConnectionPoolImpl(betterSqliteAsyncPool(path));
+        const db = new ConnectionPoolImpl(BetterSqliteDriver.open(path));
         return db;
       })
     ),
     await test(
       new JSPImpl('node-sjp-sync', dir, (path) => {
-        const db = new ConnectionPoolImpl(nodeSqlitePool(path));
+        const db = new ConnectionPoolImpl(NodeSqliteDriver.openInProcess(path));
         return db;
       })
     ),
     await test(
       new JSPImpl('node-sjp-async', dir, (path) => {
-        const db = new ConnectionPoolImpl(nodeSqliteAsyncPool(path));
+        const db = new ConnectionPoolImpl(NodeSqliteDriver.open(path));
         return db;
       })
     ),
     await test(
       new JSPOptimizedImpl('node-sjp-sync-optimized', dir, (path) => {
-        const db = new ConnectionPoolImpl(nodeSqlitePool(path));
+        const db = new ConnectionPoolImpl(NodeSqliteDriver.openInProcess(path));
         return db;
       })
     ),
     await test(
       new JSPOptimizedImpl('node-sjp-async-optimized', dir, (path) => {
-        const db = new ConnectionPoolImpl(nodeSqliteAsyncPool(path));
+        const db = new ConnectionPoolImpl(NodeSqliteDriver.open(path));
         return db;
       })
     ),

@@ -12,5 +12,5 @@
     "typeRoots": ["./src/types", "./node_modules/@types"]
   },
   "include": ["src"],
-  "references": []
+  "references": [{ "path": "../packages/sqlite-js-api" }]
 }

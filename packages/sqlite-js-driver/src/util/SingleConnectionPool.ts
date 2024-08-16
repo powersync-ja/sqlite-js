@@ -64,7 +64,10 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
         );
       });
 
-      return promise;
+      return promise.then((r) => {
+        this.inUse = reserved;
+        return r;
+      });
     }
   }
 

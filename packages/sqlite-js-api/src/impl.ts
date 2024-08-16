@@ -84,7 +84,7 @@ export class ConnectionPoolImpl
   ): Promise<T> {
     const r = await this.reserveConnection(options);
     try {
-      return r.transaction(callback, {
+      return await r.transaction(callback, {
         type: options?.type ?? (options?.readonly ? 'deferred' : 'exclusive')
       });
     } finally {

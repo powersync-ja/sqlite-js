@@ -2,7 +2,8 @@
   "name": "benchmarks",
   "type": "module",
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "start": "NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" node lib/index.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",

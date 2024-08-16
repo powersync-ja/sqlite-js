@@ -33,20 +33,23 @@ export class JSPOptimizedImpl extends Benchmark {
     const db = this.driver(dbPath);
     this.db = db;
 
-    await using c = await db.reserveConnection();
+    {
+      await using c = await db.reserveConnection();
 
-    await c.run(
-      'CREATE TABLE t1(id INTEGER PRIMARY KEY, a INTEGER, b INTEGER, c TEXT)'
-    );
-    await c.run(
-      'CREATE TABLE t2(id INTEGER PRIMARY KEY, a INTEGER, b INTEGER, c TEXT)'
-    );
-    await c.run(
-      'CREATE TABLE t3(id INTEGER PRIMARY KEY, a INTEGER, b INTEGER, c TEXT)'
-    );
-    await c.run('CREATE INDEX i3a ON t3(a)');
-    await c.run('CREATE INDEX i3b ON t3(b)');
+      await c.run(
+        'CREATE TABLE t1(id INTEGER PRIMARY KEY, a INTEGER, b INTEGER, c TEXT)'
+      );
+      await c.run(
+        'CREATE TABLE t2(id INTEGER PRIMARY KEY, a INTEGER, b INTEGER, c TEXT)'
+      );
+      await c.run(
+        'CREATE TABLE t3(id INTEGER PRIMARY KEY, a INTEGER, b INTEGER, c TEXT)'
+      );
+      await c.run('CREATE INDEX i3a ON t3(a)');
+      await c.run('CREATE INDEX i3b ON t3(b)');
+    }
 
+    // Pre-create a bunch of read connections
     let promises = [];
     for (let i = 0; i < 10; i++) {
       promises.push(
