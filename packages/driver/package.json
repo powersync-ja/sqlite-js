@@ -18,11 +18,7 @@
   "keywords": [],
   "author": "",
   "license": "MIT",
-  "dependencies": {
-    "vitest": "^2.0.5",
-    "mocha": "^10.7.3",
-    "@sqlite-js/driver": "workspace:^"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.3.0",
     "typescript": "^5.5.4"

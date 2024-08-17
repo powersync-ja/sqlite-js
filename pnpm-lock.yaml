@@ -115,16 +115,6 @@ importers:
         version: 2.0.5(@types/node@22.3.0)
 
   packages/driver:
-    dependencies:
-      '@sqlite-js/driver':
-        specifier: workspace:^
-        version: 'link:'
-      mocha:
-        specifier: ^10.7.3
-        version: 10.7.3
-      vitest:
-        specifier: ^2.0.5
-        version: 2.0.5(@types/node@22.3.0)
     devDependencies:
       '@types/node':
         specifier: ^22.3.0
