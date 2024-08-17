@@ -41,15 +41,15 @@ importers:
 
   benchmarks:
     dependencies:
-      '@powersync/sqlite-js-api':
+      '@sqlite-js/api':
         specifier: workspace:^
-        version: link:../packages/sqlite-js-api
-      '@powersync/sqlite-js-better-sqlite3':
+        version: link:../packages/api
+      '@sqlite-js/better-sqlite3-driver':
         specifier: workspace:^
-        version: link:../packages/sqlite-js-better-sqlite3
-      '@powersync/sqlite-js-driver':
+        version: link:../packages/better-sqlite3-driver
+      '@sqlite-js/driver':
         specifier: workspace:^
-        version: link:../packages/sqlite-js-driver
+        version: link:../packages/driver
       better-sqlite3:
         specifier: ^11.0.0
         version: 11.1.2
@@ -70,18 +70,18 @@ importers:
         specifier: ^5.4.5
         version: 5.5.4
 
-  packages/sqlite-js-api:
+  packages/api:
     dependencies:
-      '@powersync/sqlite-js-driver':
+      '@sqlite-js/driver':
         specifier: workspace:^
-        version: link:../sqlite-js-driver
+        version: link:../driver
     devDependencies:
-      '@powersync/sqlite-js-better-sqlite3':
+      '@sqlite-js/better-sqlite3-driver':
         specifier: workspace:^
-        version: link:../sqlite-js-better-sqlite3
-      '@powersync/sqlite-js-driver-tests':
+        version: link:../better-sqlite3-driver
+      '@sqlite-js/driver-tests':
         specifier: workspace:^
-        version: link:../sqlite-js-driver-tests
+        version: link:../driver-tests
       '@types/node':
         specifier: ^22.3.0
         version: 22.3.0
@@ -92,18 +92,18 @@ importers:
         specifier: ^2.0.5
         version: 2.0.5(@types/node@22.3.0)
 
-  packages/sqlite-js-better-sqlite3:
+  packages/better-sqlite3-driver:
     dependencies:
-      '@powersync/sqlite-js-driver':
+      '@sqlite-js/driver':
         specifier: workspace:^
-        version: link:../sqlite-js-driver
+        version: link:../driver
       better-sqlite3:
         specifier: ^11.1.2
         version: 11.1.2
     devDependencies:
-      '@powersync/sqlite-js-driver-tests':
+      '@sqlite-js/driver-tests':
         specifier: workspace:^
-        version: link:../sqlite-js-driver-tests
+        version: link:../driver-tests
       '@types/node':
         specifier: ^22.3.0
         version: 22.3.0
@@ -114,9 +114,9 @@ importers:
         specifier: ^2.0.5
         version: 2.0.5(@types/node@22.3.0)
 
-  packages/sqlite-js-driver:
+  packages/driver:
     dependencies:
-      '@powersync/sqlite-js-driver':
+      '@sqlite-js/driver':
         specifier: workspace:^
         version: 'link:'
       mocha:
@@ -133,11 +133,11 @@ importers:
         specifier: ^5.5.4
         version: 5.5.4
 
-  packages/sqlite-js-driver-tests:
+  packages/driver-tests:
     dependencies:
-      '@powersync/sqlite-js-driver':
+      '@sqlite-js/driver':
         specifier: workspace:^
-        version: link:../sqlite-js-driver
+        version: link:../driver
       mocha:
         specifier: ^10.7.3
         version: 10.7.3
@@ -1994,7 +1994,7 @@ snapshots:
       '@jest/schemas': 29.6.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 20.14.15
+      '@types/node': 22.3.0
       '@types/yargs': 17.0.33
       chalk: 4.1.2
 
@@ -2745,7 +2745,7 @@ snapshots:
   jest-util@29.7.0:
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 20.14.15
+      '@types/node': 22.3.0
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11

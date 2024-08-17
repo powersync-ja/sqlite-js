@@ -10,9 +10,9 @@
     "prando": "^6.0.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
-    "@powersync/sqlite-js-driver": "workspace:^",
-    "@powersync/sqlite-js-better-sqlite3": "workspace:^",
-    "@powersync/sqlite-js-api": "workspace:^"
+    "@sqlite-js/driver": "workspace:^",
+    "@sqlite-js/better-sqlite3-driver": "workspace:^",
+    "@sqlite-js/api": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^20.14.2",

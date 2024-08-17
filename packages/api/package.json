@@ -1,0 +1,27 @@
+{
+  "name": "@sqlite-js/api",
+  "version": "0.0.1",
+  "description": "",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest",
+    "clean": "tsc -b --clean && rm -rf lib"
+  },
+  "exports": {
+    ".": "./lib/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@sqlite-js/driver": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^22.3.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5",
+    "@sqlite-js/better-sqlite3-driver": "workspace:^",
+    "@sqlite-js/driver-tests": "workspace:^"
+  }
+}

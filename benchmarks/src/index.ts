@@ -1,6 +1,6 @@
-import { NodeSqliteDriver } from '@powersync/sqlite-js-driver/node';
-import { ConnectionPoolImpl } from '@powersync/sqlite-js-api';
-import { BetterSqliteDriver } from '@powersync/sqlite-js-better-sqlite3';
+import { NodeSqliteDriver } from '@sqlite-js/driver/node';
+import { ConnectionPoolImpl } from '@sqlite-js/api';
+import { BetterSqliteDriver } from '@sqlite-js/better-sqlite3-driver';
 import { Benchmark } from './Benchmark.js';
 import { BenchmarkResults } from './BenchmarkResults.js';
 import { BetterSqlite3Impl } from './implementations/better-sqlite3.js';
