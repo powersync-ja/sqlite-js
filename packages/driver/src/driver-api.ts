@@ -32,6 +32,8 @@ export interface SqliteDriverConnection {
     options?: { tables?: string[]; batchLimit?: number }
   ): () => void;
 
+  getLastChanges(): Promise<SqliteChanges>;
+
   close(): Promise<void>;
 }
 
@@ -59,7 +61,7 @@ export interface SqliteDriverStatement {
    *
    * Avoids the need to use a separate statement to get changes.
    */
-  run(options?: StepOptions): Promise<SqliteRunResult>;
+  run(options?: StepOptions): Promise<SqliteChanges>;
 
   [Symbol.dispose](): void;
 }
@@ -117,7 +119,7 @@ export interface ReserveConnectionOptions {
   signal?: AbortSignal;
 }
 
-export interface SqliteRunResult {
+export interface SqliteChanges {
   changes: number;
   lastInsertRowId: bigint;
 }

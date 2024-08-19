@@ -8,7 +8,7 @@ import {
   SqliteDriverStatement,
   SqliteParameterBinding,
   SqliteRow,
-  SqliteRunResult,
+  SqliteChanges,
   SqliteStepResult,
   SqliteValue,
   StepOptions,
@@ -49,7 +49,7 @@ export function nodeSqlitePool(path: string): SqliteDriverConnectionPool {
 interface InternalStatement extends SqliteDriverStatement {
   getColumnsSync(): string[];
   stepSync(n?: number, options?: StepOptions): SqliteStepResult;
-  runSync(options?: StepOptions): SqliteRunResult;
+  runSync(options?: StepOptions): SqliteChanges;
 
   readonly source: string;
 
@@ -87,11 +87,11 @@ class ErrorStatement implements InternalStatement {
     throw this.error;
   }
 
-  runSync(options?: StepOptions): SqliteRunResult {
+  runSync(options?: StepOptions): SqliteChanges {
     throw this.error;
   }
 
-  async run(options?: StepOptions): Promise<SqliteRunResult> {
+  async run(options?: StepOptions): Promise<SqliteChanges> {
     throw this.error;
   }
 
@@ -168,7 +168,7 @@ class NodeSqliteSyncStatement implements InternalStatement {
     }
   }
 
-  async run(options?: StepOptions): Promise<SqliteRunResult> {
+  async run(options?: StepOptions): Promise<SqliteChanges> {
     try {
       return this.runSync(options);
     } catch (e) {
@@ -176,7 +176,7 @@ class NodeSqliteSyncStatement implements InternalStatement {
     }
   }
 
-  runSync(options?: StepOptions): SqliteRunResult {
+  runSync(options?: StepOptions): SqliteChanges {
     if (options?.requireTransaction) {
       // TODO: Implement
     }
@@ -270,6 +270,8 @@ export class NodeSqliteConnection implements SqliteDriverConnection {
   statements = new Map<number, InternalStatement>();
   name: string;
 
+  changeStatement: sqlite.StatementSync;
+
   constructor(
     db: sqlite.DatabaseSync,
     options?: { readonly?: boolean; name?: string }
@@ -282,6 +284,22 @@ export class NodeSqliteConnection implements SqliteDriverConnection {
       this.con.exec('PRAGMA query_only = true');
     }
     this.name = options?.name ?? '';
+    this.changeStatement = this.con.prepare(
+      'select last_insert_rowid() as l, changes() as c'
+    );
+    this.changeStatement.setReadBigInts(true);
+  }
+
+  async getLastChanges(): Promise<SqliteChanges> {
+    return this._getLastChangesSync();
+  }
+
+  _getLastChangesSync(): SqliteChanges {
+    const r = this.changeStatement.get() as any;
+    return {
+      lastInsertRowId: r!.l,
+      changes: Number(r!.c)
+    };
   }
 
   async close() {
@@ -349,7 +367,7 @@ export class NodeSqliteConnection implements SqliteDriverConnection {
     return statement.stepSync(n, { requireTransaction });
   }
 
-  private _run(command: SqliteRun): SqliteRunResult {
+  private _run(command: SqliteRun): SqliteChanges {
     const { id } = command;
     const statement = this.requireStatement(id);
     return statement.runSync(command);
@@ -384,6 +402,8 @@ export class NodeSqliteConnection implements SqliteDriverConnection {
         return this._finalize(command);
       case SqliteCommandType.parse:
         return this._parse(command);
+      case SqliteCommandType.changes:
+        return this._getLastChangesSync();
       default:
         throw new Error(`Unknown command: ${command.type}`);
     }

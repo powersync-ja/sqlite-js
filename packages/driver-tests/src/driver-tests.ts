@@ -106,6 +106,11 @@ export function describeDriverTests(
 
       expect(rows).toEqual([{ id: 1 }]);
 
+      expect(await connection.connection.getLastChanges()).toEqual({
+        changes: 1,
+        lastInsertRowId: 1n
+      });
+
       if (features.getColumns) {
         const columns = await s2.getColumns();
         expect(columns).toEqual(['id']);

@@ -5,7 +5,7 @@ import {
   SqliteDriverConnection,
   SqliteDriverStatement,
   SqliteParameterBinding,
-  SqliteRunResult,
+  SqliteChanges,
   SqliteStepResult,
   StepOptions,
   UpdateListener
@@ -85,6 +85,12 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
       }
     });
     return new WorkerDriverStatement(this, id);
+  }
+
+  async getLastChanges(): Promise<SqliteChanges> {
+    return await this._push({
+      type: SqliteCommandType.changes
+    });
   }
 
   async sync(): Promise<void> {
@@ -227,7 +233,7 @@ class WorkerDriverStatement implements SqliteDriverStatement {
     });
   }
 
-  async run(options?: StepOptions): Promise<SqliteRunResult> {
+  async run(options?: StepOptions): Promise<SqliteChanges> {
     return this.driver._push({
       type: SqliteCommandType.run,
       id: this.id,

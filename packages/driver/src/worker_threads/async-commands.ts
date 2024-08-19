@@ -1,6 +1,6 @@
 import {
   SqliteParameterBinding,
-  SqliteRunResult,
+  SqliteChanges,
   SqliteStepResult
 } from '../driver-api.js';
 import { SerializedDriverError } from '../sqlite-error.js';
@@ -13,7 +13,8 @@ export enum SqliteCommandType {
   finalize = 5,
   sync = 6,
   parse = 7,
-  run = 8
+  run = 8,
+  changes = 9
 }
 
 export type SqliteDriverError = SerializedDriverError;
@@ -84,6 +85,10 @@ export interface SqliteSync {
   type: SqliteCommandType.sync;
 }
 
+export interface SqliteGetChanges {
+  type: SqliteCommandType.changes;
+}
+
 export type SqliteCommand =
   | SqlitePrepare
   | SqliteBind
@@ -92,15 +97,18 @@ export type SqliteCommand =
   | SqliteReset
   | SqliteFinalize
   | SqliteSync
-  | SqliteParse;
+  | SqliteParse
+  | SqliteGetChanges;
 
 export type InferCommandResult<T extends SqliteCommand> = T extends SqliteRun
-  ? SqliteRunResult
+  ? SqliteChanges
   : T extends SqliteStep
     ? SqliteStepResult
     : T extends SqliteParse
       ? SqliteParseResult
-      : void;
+      : T extends SqliteGetChanges
+        ? SqliteChanges
+        : void;
 
 export type InferBatchResult<T extends SqliteCommand[]> = {
   [i in keyof T]:

@@ -5,7 +5,7 @@ import {
   SqliteDriverConnectionPool,
   SqliteDriverStatement,
   SqliteParameterBinding,
-  SqliteRunResult,
+  SqliteChanges,
   SqliteStepResult,
   SqliteValue,
   StepOptions,
@@ -35,7 +35,7 @@ import { BetterSqliteDriverOptions } from './driver.js';
 interface InternalStatement extends SqliteDriverStatement {
   getColumnsSync(): string[];
   stepSync(n?: number, options?: StepOptions): SqliteStepResult;
-  runSync(options?: StepOptions): SqliteRunResult;
+  runSync(options?: StepOptions): SqliteChanges;
 
   readonly source: string;
 
@@ -63,7 +63,7 @@ class ErrorStatement implements InternalStatement {
   stepSync(n?: number, options?: StepOptions): SqliteStepResult {
     throw this.error;
   }
-  runSync(options?: StepOptions): SqliteRunResult {
+  runSync(options?: StepOptions): SqliteChanges {
     throw this.error;
   }
   async getColumns(): Promise<string[]> {
@@ -76,7 +76,7 @@ class ErrorStatement implements InternalStatement {
     throw this.error;
   }
 
-  async run(options?: StepOptions): Promise<SqliteRunResult> {
+  async run(options?: StepOptions): Promise<SqliteChanges> {
     throw this.error;
   }
 
@@ -167,7 +167,7 @@ class BetterSqlitePreparedStatement implements InternalStatement {
     }
   }
 
-  async run(options?: StepOptions): Promise<SqliteRunResult> {
+  async run(options?: StepOptions): Promise<SqliteChanges> {
     try {
       return this.runSync(options);
     } catch (e) {
@@ -175,7 +175,7 @@ class BetterSqlitePreparedStatement implements InternalStatement {
     }
   }
 
-  runSync(options?: StepOptions): SqliteRunResult {
+  runSync(options?: StepOptions): SqliteChanges {
     if (options?.requireTransaction) {
       if (!this.statement.database.inTransaction) {
         throw new Error('Transaction has been rolled back');
@@ -274,6 +274,8 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   con: bsqlite.Database;
   private statements = new Map<number, InternalStatement>();
 
+  private changeStatement: bsqlite.Statement;
+
   static open(
     path: string,
     options?: bsqlite.Options & BetterSqliteDriverOptions
@@ -292,6 +294,23 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
 
   constructor(con: bsqlite.Database) {
     this.con = con;
+
+    this.changeStatement = this.con.prepare(
+      'select last_insert_rowid() as l, changes() as c'
+    );
+    this.changeStatement.safeIntegers(true);
+  }
+
+  async getLastChanges(): Promise<SqliteChanges> {
+    return this._getLastChangesSync();
+  }
+
+  _getLastChangesSync(): SqliteChanges {
+    const r = this.changeStatement.get() as any;
+    return {
+      lastInsertRowId: r!.l,
+      changes: Number(r!.c)
+    };
   }
 
   async close() {
@@ -358,7 +377,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     return statement.stepSync(n, { requireTransaction });
   }
 
-  private _run(command: SqliteRun): SqliteRunResult {
+  private _run(command: SqliteRun): SqliteChanges {
     const { id, requireTransaction } = command;
     const statement = this.requireStatement(id);
     return statement.runSync({ requireTransaction });
@@ -396,6 +415,8 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
         return this._finalize(command);
       case SqliteCommandType.parse:
         return this._parse(command);
+      case SqliteCommandType.changes:
+        return this._getLastChangesSync();
       default:
         throw new Error(`Unknown command: ${command.type}`);
     }
