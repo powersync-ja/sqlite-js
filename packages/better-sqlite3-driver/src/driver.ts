@@ -12,13 +12,13 @@ import {
 import { WorkerDriverConnection } from '@sqlite-js/driver/worker_threads';
 import type * as bsqlite from 'better-sqlite3';
 
-export interface BetterSqliteDriverOptions
-  extends ConnectionPoolOptions,
-    bsqlite.Options {
+export interface BetterSqliteDriverOptions extends ConnectionPoolOptions {
   /**
    * Specify a custom path to a worker script, to customize the loading process.
    */
   workerPath?: string | URL;
+
+  loadExtensions?: string[];
 }
 
 export class BetterSqliteDriver implements SqliteDriverConnectionPool {
@@ -52,7 +52,7 @@ export class BetterSqliteDriver implements SqliteDriverConnectionPool {
       async openConnection(connectionOptions) {
         return new WorkerDriverConnection(workerPath, path, {
           ...options,
-          readonly: (options?.readonly ?? connectionOptions?.readonly) || false
+          readonly: connectionOptions?.readonly || false
         });
       }
     });

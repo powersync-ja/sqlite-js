@@ -30,6 +30,7 @@ import {
   SqliteRun,
   SqliteStep
 } from '@sqlite-js/driver/worker_threads';
+import { BetterSqliteDriverOptions } from './driver.js';
 
 interface InternalStatement extends SqliteDriverStatement {
   getColumnsSync(): string[];
@@ -273,10 +274,18 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   con: bsqlite.Database;
   private statements = new Map<number, InternalStatement>();
 
-  static open(path: string, options?: bsqlite.Options): BetterSqliteConnection {
+  static open(
+    path: string,
+    options?: bsqlite.Options & BetterSqliteDriverOptions
+  ): BetterSqliteConnection {
     const con = new DatabaseConstructor(path, options);
     con.exec('PRAGMA journal_mode = WAL');
     con.exec('PRAGMA synchronous = normal');
+    if (options?.loadExtensions) {
+      for (let extension of options.loadExtensions) {
+        con.loadExtension(extension);
+      }
+    }
     return new BetterSqliteConnection(con);
   }
 
