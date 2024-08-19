@@ -48,7 +48,8 @@ export class NodeSqliteDriver implements SqliteDriverConnectionPool {
     const connection = new ReadWriteConnectionPool(
       {
         openConnection: async (connectionOptions) => {
-          return new WorkerDriverConnection(workerPath, path, {
+          return new WorkerDriverConnection(workerPath, {
+            path,
             readonly: connectionOptions?.readonly ?? false,
             connectionName: connectionOptions?.connectionName,
             workerOptions: {

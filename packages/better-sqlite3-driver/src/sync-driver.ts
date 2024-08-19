@@ -281,6 +281,7 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     const con = new DatabaseConstructor(path, options);
     con.exec('PRAGMA journal_mode = WAL');
     con.exec('PRAGMA synchronous = normal');
+
     if (options?.loadExtensions) {
       for (let extension of options.loadExtensions) {
         con.loadExtension(extension);

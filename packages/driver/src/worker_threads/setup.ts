@@ -3,15 +3,14 @@ import { isErrorResponse, WorkerDriver } from './async-commands.js';
 import { setTimeout } from 'timers/promises';
 
 import * as worker_threads from 'worker_threads';
+import type { WorkerDriverConnectionOptions } from './worker-driver.js';
 
-export interface ConnectionOptions {
-  path: string;
-  readonly?: boolean;
-  connectionName?: string;
-}
+export type { WorkerDriverConnectionOptions };
 
 export interface WorkerDriverConfig {
-  openConnection: (options: ConnectionOptions) => Promise<WorkerDriver>;
+  openConnection: (
+    options: WorkerDriverConnectionOptions
+  ) => Promise<WorkerDriver>;
 }
 
 export function setupDriverWorker(config: WorkerDriverConfig) {
@@ -32,7 +31,7 @@ export function setupDriverPort(
 
     if (message == 'open') {
       try {
-        db = await config.openConnection(args);
+        db = await config.openConnection(args as WorkerDriverConnectionOptions);
         port.postMessage({ id });
         opened.resolve();
       } catch (e: any) {

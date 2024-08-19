@@ -21,6 +21,8 @@ export class MultiConnectionPool implements SqliteDriverConnectionPool {
   private _queue: QueuedPoolItem[] = [];
   private _maxConnections: number;
 
+  private options: ConnectionPoolOptions;
+
   [Symbol.asyncDispose]: () => Promise<void> = undefined as any;
 
   constructor(
@@ -31,6 +33,7 @@ export class MultiConnectionPool implements SqliteDriverConnectionPool {
       this[Symbol.asyncDispose] = () => this.close();
     }
     this._maxConnections = options?.maxConnections ?? 2;
+    this.options = options ?? {};
   }
 
   reserveConnection(
@@ -52,6 +55,7 @@ export class MultiConnectionPool implements SqliteDriverConnectionPool {
     options?: ReserveConnectionOptions
   ): Promise<SqliteDriverConnection> {
     const connection = await this.factory.openConnection({
+      ...this.options,
       ...options,
       connectionName: `connection-${this._allConnections.size + 1}`
     });

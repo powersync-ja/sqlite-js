@@ -50,7 +50,8 @@ export class BetterSqliteDriver implements SqliteDriverConnectionPool {
 
     const connection = new ReadWriteConnectionPool({
       async openConnection(connectionOptions) {
-        return new WorkerDriverConnection(workerPath, path, {
+        return new WorkerDriverConnection(workerPath, {
+          path,
           ...options,
           readonly: connectionOptions?.readonly || false
         });

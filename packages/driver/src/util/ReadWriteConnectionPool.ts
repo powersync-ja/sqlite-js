@@ -21,9 +21,8 @@ export class ReadWriteConnectionPool implements SqliteDriverConnectionPool {
 
   constructor(factory: DriverFactory, options?: ConnectionPoolOptions) {
     this.readPool = new MultiConnectionPool(factory, options);
-
     this.initPromise = factory
-      .openConnection({ readonly: false, connectionName: 'writer' })
+      .openConnection({ ...options, readonly: false, connectionName: 'writer' })
       .then((con) => {
         this.writePool = new SingleConnectionPool(con);
       });

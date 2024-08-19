@@ -23,6 +23,7 @@ import {
 } from './async-commands.js';
 
 export interface WorkerDriverConnectionOptions {
+  path: string;
   connectionName?: string;
   readonly?: boolean;
   workerOptions?: worker_threads.WorkerOptions;
@@ -43,14 +44,13 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
 
   constructor(
     workerPath: string | URL,
-    path: string,
-    options?: WorkerDriverConnectionOptions
+    options: WorkerDriverConnectionOptions
   ) {
     const worker = new worker_threads.Worker(
       workerPath,
       options?.workerOptions
     );
-    this.post('open', { path, options });
+    this.post('open', options);
     worker.addListener('error', (err) => {
       console.error('worker error', err);
     });
