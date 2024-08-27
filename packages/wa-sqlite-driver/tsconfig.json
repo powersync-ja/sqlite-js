@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "lib",
+    "rootDir": "src",
+    "esModuleInterop": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    // FIXME: issues with @journeyapps/wa-sqlite definitions
+    "strict": false
+  },
+  "include": ["src"],
+  "references": [{ "path": "../driver" }, { "path": "../driver-tests" }]
+}

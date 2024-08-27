@@ -303,12 +303,12 @@ export class ConnectionImpl implements SqliteConnection {
   }
 
   async begin(options?: TransactionOptions): Promise<SqliteBeginTransaction> {
-    await this.init();
+    this.init();
 
     if ((options?.type ?? 'exclusive') == 'exclusive') {
-      await this._beginExclusive!.select();
+      await this._beginExclusive!.run();
     } else {
-      await this._begin!.select();
+      await this._begin!.run();
     }
 
     return new BeginTransactionImpl(this);
@@ -321,18 +321,18 @@ export class ConnectionImpl implements SqliteConnection {
     this.init();
 
     if ((options?.type ?? 'exclusive') == 'exclusive') {
-      await this._beginExclusive!.select();
+      await this._beginExclusive!.run();
     } else {
-      await this._begin!.select();
+      await this._begin!.run();
     }
     try {
       const tx = new TransactionImpl(this);
       const result = await callback(tx);
 
-      await this.commit!.select();
+      await this.commit!.run();
       return result;
     } catch (e) {
-      await this.rollback!.select();
+      await this.rollback!.run();
       throw e;
     }
   }
