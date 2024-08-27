@@ -35,8 +35,8 @@ export function waSqlitePool(path: string): SqliteDriverConnectionPool {
 const m = new mutex.Mutex();
 
 class StatementImpl implements SqliteDriverStatement {
-  private preparePromise: Promise<void>;
-  private bindPromise?: Promise<void>;
+  private preparePromise: Promise<{ error: SqliteError | null }>;
+  private bindPromise?: Promise<{ error: SqliteError | null }>;
   private columns: string[] = [];
 
   private stringRef?: number;
@@ -52,7 +52,7 @@ class StatementImpl implements SqliteDriverStatement {
   }
 
   async prepare() {
-    await m.runExclusive(() => this._prepare());
+    return await m.runExclusive(() => this._prepare());
   }
 
   async _prepare() {
@@ -66,22 +66,36 @@ class StatementImpl implements SqliteDriverStatement {
 
       this.statementRef = r?.stmt;
       this.columns = sqlite3.column_names(this.statementRef!);
+      return { error: null };
     } catch (e: any) {
-      throw new SqliteError({
-        code: 'SQLITE_ERROR',
-        message: e.message
-      });
+      return {
+        error: new SqliteError({
+          code: 'SQLITE_ERROR',
+          message: e.message
+        })
+      };
+    }
+  }
+
+  private async _waitForPrepare() {
+    const { error } = await (this.bindPromise ?? this.preparePromise);
+    if (error) {
+      throw error;
     }
   }
 
   async getColumns(): Promise<string[]> {
-    await this.preparePromise;
+    await this._waitForPrepare();
     return sqlite3.column_names(this.statementRef!);
   }
 
   bind(parameters: SqliteParameterBinding): void {
-    this.bindPromise = this.preparePromise.then(async () => {
+    this.bindPromise = this.preparePromise.then(async (result) => {
+      if (result.error) {
+        return result;
+      }
       await m.runExclusive(() => this.bindImpl(parameters));
+      return { error: null };
     });
   }
 
@@ -125,13 +139,12 @@ class StatementImpl implements SqliteDriverStatement {
   }
 
   async step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
-    await this.preparePromise;
+    await this._waitForPrepare();
+
     return await m.runExclusive(() => this._step(n, options));
   }
 
   async _step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
-    await this.preparePromise;
-
     try {
       if (this.done) {
         return { done: true };
@@ -185,7 +198,10 @@ class StatementImpl implements SqliteDriverStatement {
   }
 
   async _finalize() {
+    // Wait for these to complete, but ignore any errors.
+    // TODO: also wait for run/step to complete
     await this.preparePromise;
+    await this.bindPromise;
 
     if (this.statementRef) {
       sqlite3.finalize(this.statementRef);
