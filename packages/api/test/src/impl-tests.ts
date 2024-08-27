@@ -12,13 +12,13 @@ export function describeImplTests(
     let dbPath: string;
 
     const open = async () => {
-      const dir = path.dirname(dbPath);
-      try {
-        await fs.mkdir(dir);
-      } catch (e) {}
-      try {
-        await fs.rm(dbPath);
-      } catch (e) {}
+      // const dir = path.dirname(dbPath);
+      // try {
+      //   await fs.mkdir(dir);
+      // } catch (e) {}
+      // try {
+      //   await fs.rm(dbPath);
+      // } catch (e) {}
       return factory(dbPath);
     };
 
