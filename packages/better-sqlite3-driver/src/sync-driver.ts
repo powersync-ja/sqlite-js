@@ -1,11 +1,10 @@
 import {
   PrepareOptions,
   ResetOptions,
+  SqliteChanges,
   SqliteDriverConnection,
-  SqliteDriverConnectionPool,
   SqliteDriverStatement,
   SqliteParameterBinding,
-  SqliteChanges,
   SqliteStepResult,
   SqliteValue,
   StepOptions,
@@ -14,83 +13,13 @@ import {
 import type * as bsqlite from 'better-sqlite3';
 import DatabaseConstructor from 'better-sqlite3';
 
-import { mapError, ReadWriteConnectionPool } from '@sqlite-js/driver/util';
-import {
-  InferBatchResult,
-  SqliteBind,
-  SqliteCommand,
-  SqliteCommandResponse,
-  SqliteCommandType,
-  SqliteDriverError,
-  SqliteFinalize,
-  SqliteParse,
-  SqliteParseResult,
-  SqlitePrepare,
-  SqliteReset,
-  SqliteRun,
-  SqliteStep
-} from '@sqlite-js/driver/worker_threads';
+import { ErrorStatement, mapError } from '@sqlite-js/driver/util';
+import { SqliteDriverError } from '@sqlite-js/driver/worker_threads';
 import { BetterSqliteDriverOptions } from './driver.js';
 
 interface InternalStatement extends SqliteDriverStatement {
-  getColumnsSync(): string[];
-  stepSync(n?: number, options?: StepOptions): SqliteStepResult;
-  runSync(options?: StepOptions): SqliteChanges;
-
-  readonly source: string;
-
-  readonly persisted: boolean;
-}
-
-class ErrorStatement implements InternalStatement {
-  readonly error: SqliteDriverError;
   readonly source: string;
   readonly persisted: boolean;
-
-  constructor(
-    source: string,
-    error: SqliteDriverError,
-    options: PrepareOptions
-  ) {
-    this.error = error;
-    this.source = source;
-    this.persisted = options.persist ?? false;
-  }
-
-  getColumnsSync(): string[] {
-    throw this.error;
-  }
-  stepSync(n?: number, options?: StepOptions): SqliteStepResult {
-    throw this.error;
-  }
-  runSync(options?: StepOptions): SqliteChanges {
-    throw this.error;
-  }
-  async getColumns(): Promise<string[]> {
-    throw this.error;
-  }
-  bind(parameters: SqliteParameterBinding): void {
-    // no-op
-  }
-  async step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
-    throw this.error;
-  }
-
-  async run(options?: StepOptions): Promise<SqliteChanges> {
-    throw this.error;
-  }
-
-  finalize(): void {
-    // no-op
-  }
-
-  reset(options?: ResetOptions): void {
-    // no-op
-  }
-
-  [Symbol.dispose](): void {
-    // no-op
-  }
 }
 
 class BetterSqlitePreparedStatement implements InternalStatement {
@@ -120,10 +49,6 @@ class BetterSqlitePreparedStatement implements InternalStatement {
   }
 
   async getColumns(): Promise<string[]> {
-    return this.getColumnsSync();
-  }
-
-  getColumnsSync(): string[] {
     const existing = this.statement;
     if (existing.reader) {
       const columns = existing.columns().map((c) => c.name);
@@ -272,8 +197,6 @@ class BetterSqlitePreparedStatement implements InternalStatement {
 
 export class BetterSqliteConnection implements SqliteDriverConnection {
   con: bsqlite.Database;
-  private statements = new Map<number, InternalStatement>();
-
   private changeStatement: bsqlite.Statement;
 
   static open(
@@ -302,10 +225,6 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   }
 
   async getLastChanges(): Promise<SqliteChanges> {
-    return this._getLastChangesSync();
-  }
-
-  _getLastChangesSync(): SqliteChanges {
     const r = this.changeStatement.get() as any;
     return {
       lastInsertRowId: r!.l,
@@ -314,15 +233,6 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
   }
 
   async close() {
-    const remainingStatements = [...this.statements.values()].filter(
-      (s) => !s.persisted
-    );
-    if (remainingStatements.length > 0) {
-      const statement = remainingStatements[0];
-      throw new Error(
-        `${remainingStatements.length} statements not finalized. First: ${statement.source}`
-      );
-    }
     this.con.close();
   }
 
@@ -333,115 +243,6 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     } catch (error) {
       return new ErrorStatement(sql, mapError(error), options ?? {});
     }
-  }
-
-  private requireStatement(id: number) {
-    const statement = this.statements.get(id);
-    if (statement == null) {
-      throw new Error(`statement not found: ${id}`);
-    }
-    return statement;
-  }
-
-  private _prepare(command: SqlitePrepare) {
-    const { id, sql } = command;
-    const statement = this.prepare(sql, {
-      bigint: command.bigint,
-      persist: command.persist,
-      rawResults: command.rawResults
-    });
-    const existing = this.statements.get(id);
-    if (existing != null) {
-      throw new Error(
-        `Replacing statement ${id} without finalizing the previous one`
-      );
-    }
-    this.statements.set(id, statement);
-  }
-
-  private _parse(command: SqliteParse): SqliteParseResult {
-    const { id } = command;
-    const statement = this.requireStatement(id);
-    return { columns: statement.getColumnsSync() };
-  }
-
-  private _bind(command: SqliteBind): void {
-    const { id, parameters } = command;
-    const statement = this.requireStatement(id);
-    statement.bind(parameters);
-  }
-
-  private _step(command: SqliteStep): SqliteStepResult {
-    const { id, n, requireTransaction } = command;
-    const statement = this.requireStatement(id);
-    return statement.stepSync(n, { requireTransaction });
-  }
-
-  private _run(command: SqliteRun): SqliteChanges {
-    const { id, requireTransaction } = command;
-    const statement = this.requireStatement(id);
-    return statement.runSync({ requireTransaction });
-  }
-
-  private _reset(command: SqliteReset): void {
-    const { id } = command;
-    const statement = this.requireStatement(id);
-    statement.reset(command);
-  }
-
-  private _finalize(command: SqliteFinalize): void {
-    const { id } = command;
-
-    const statement = this.statements.get(id);
-    if (statement != null) {
-      statement.finalize();
-      this.statements.delete(id);
-    }
-  }
-
-  private _executeCommand(command: SqliteCommand): any {
-    switch (command.type) {
-      case SqliteCommandType.prepare:
-        return this._prepare(command);
-      case SqliteCommandType.bind:
-        return this._bind(command);
-      case SqliteCommandType.step:
-        return this._step(command);
-      case SqliteCommandType.run:
-        return this._run(command);
-      case SqliteCommandType.reset:
-        return this._reset(command);
-      case SqliteCommandType.finalize:
-        return this._finalize(command);
-      case SqliteCommandType.parse:
-        return this._parse(command);
-      case SqliteCommandType.changes:
-        return this._getLastChangesSync();
-      default:
-        throw new Error(`Unknown command: ${command.type}`);
-    }
-  }
-
-  async execute<const T extends SqliteCommand[]>(
-    commands: T
-  ): Promise<InferBatchResult<T>> {
-    let results: SqliteCommandResponse[] = [];
-
-    for (let command of commands) {
-      try {
-        const result = this._executeCommand(command);
-        results.push({ value: result });
-      } catch (e: any) {
-        results.push({
-          error: mapError(e)
-        });
-      }
-    }
-    return results as InferBatchResult<T>;
-  }
-
-  dispose(): void {
-    // No-op
   }
 
   onUpdate(

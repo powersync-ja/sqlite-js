@@ -4,13 +4,15 @@ import { setTimeout } from 'timers/promises';
 
 import * as worker_threads from 'worker_threads';
 import type { WorkerDriverConnectionOptions } from './worker-driver.js';
+import { SqliteDriverConnection } from '../driver-api.js';
+import { WorkerConnectionAdapter } from './WorkerDriverAdapter.js';
 
 export type { WorkerDriverConnectionOptions };
 
 export interface WorkerDriverConfig {
   openConnection: (
     options: WorkerDriverConnectionOptions
-  ) => Promise<WorkerDriver>;
+  ) => Promise<SqliteDriverConnection>;
 }
 
 export function setupDriverWorker(config: WorkerDriverConfig) {
@@ -31,7 +33,10 @@ export function setupDriverPort(
 
     if (message == 'open') {
       try {
-        db = await config.openConnection(args as WorkerDriverConnectionOptions);
+        const connection = await config.openConnection(
+          args as WorkerDriverConnectionOptions
+        );
+        db = new WorkerConnectionAdapter(connection);
         port.postMessage({ id });
         opened.resolve();
       } catch (e: any) {
@@ -81,13 +86,17 @@ export function setupDriverPort(
   };
 }
 
-export async function retriedOpen(open: () => WorkerDriver, timeout: number) {
+export async function retriedOpen(
+  open: () => SqliteDriverConnection,
+  timeout: number
+) {
   const endTime = performance.now() + timeout;
   let delay = 1;
   while (true) {
     try {
       return open();
     } catch (e) {
+      console.error(e);
       if (performance.now() >= endTime) {
         throw e;
       }
