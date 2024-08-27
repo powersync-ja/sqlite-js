@@ -9,7 +9,7 @@ export interface TestContext {
   fullName: string;
 }
 
-export const isVitest = true || process.env.VITEST == 'true';
+export const isVitest = process.env.VITEST == 'true';
 export const isMocha = !isVitest;
 
 let testImpl, describeImpl, beforeEachImpl, expectImpl;

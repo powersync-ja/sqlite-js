@@ -4,5 +4,7 @@ import { waSqlitePool } from '../../lib/index.js';
 describeDriverTests(
   'wa-sqlite',
   { getColumns: true, rawResults: true, allowsMissingParameters: false },
-  (path) => waSqlitePool(':memory:')
+  async (path) => {
+    return waSqlitePool(':memory:');
+  }
 );

@@ -11,6 +11,9 @@ export default defineConfig({
     exclude: ['@journeyapps/wa-sqlite'],
     include: []
   },
+  define: {
+    'process.env.VITEST': JSON.stringify('true')
+  },
   test: {
     // environment: 'node',
     // include: ['test/src/**/*.test.ts'],
