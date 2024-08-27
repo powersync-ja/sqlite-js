@@ -14,7 +14,6 @@ import type * as bsqlite from 'better-sqlite3';
 import DatabaseConstructor from 'better-sqlite3';
 
 import { ErrorStatement, mapError } from '@sqlite-js/driver/util';
-import { SqliteDriverError } from '@sqlite-js/driver/worker_threads';
 import { BetterSqliteDriverOptions } from './driver.js';
 
 interface InternalStatement extends SqliteDriverStatement {

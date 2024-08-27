@@ -20,7 +20,6 @@ import {
   mapError,
   ReadWriteConnectionPool
 } from '../util/index.js';
-import { SqliteDriverError } from '../worker_threads/async-commands.js';
 import { loadNodeSqlite } from './node-sqlite.js';
 
 export function nodeSqlitePool(path: string): SqliteDriverConnectionPool {
