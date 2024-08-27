@@ -1,7 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { beforeEach, describe, test } from './test.js';
-import { expect } from 'expect';
+import { beforeEach, describe, test, expect } from './test.js';
 import { SqliteDriverConnectionPool } from '@sqlite-js/driver';
 
 export interface DriverFeatures {
