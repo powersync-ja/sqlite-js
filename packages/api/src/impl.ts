@@ -70,7 +70,7 @@ export class ConnectionPoolImpl
     args?: SqliteArguments,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
   ): Promise<RunResult> {
-    const r = await this.reserveConnection(options);
+    const r = await this.reserveConnection({ readonly: false, ...options });
     try {
       return r.connection.run(query, args, options);
     } finally {
@@ -108,7 +108,7 @@ export class ConnectionPoolImpl
     args?: SqliteArguments,
     options?: (StreamOptions & ReserveConnectionOptions) | undefined
   ): AsyncGenerator<T[], any, unknown> {
-    const r = await this.reserveConnection(options);
+    const r = await this.reserveConnection({ readonly: true, ...options });
     try {
       return r.stream<T>(query, args, options);
     } finally {
