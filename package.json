@@ -6,9 +6,8 @@
     "format": "prettier . --write"
   },
   "dependencies": {},
+  "private": true,
   "type": "module",
-  "main": "./lib/index.js",
-  "module": "./lib/index.js",
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.9",
     "@types/mocha": "^10.0.6",
