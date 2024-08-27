@@ -1,0 +1,26 @@
+{
+  "name": "@sqlite-js/driver",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean && rm -rf lib"
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./worker_threads": "./lib/worker_threads/index.js",
+    "./worker_threads/setup": "./lib/worker_threads/setup.js",
+    "./util": "./lib/util/index.js",
+    "./node": "./lib/node/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.3.0",
+    "typescript": "^5.5.4"
+  }
+}

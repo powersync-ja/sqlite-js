@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "lib": ["ES2022", "esnext.disposable", "DOM"],
+    "target": "ES2022",
+    "strict": true,
+    "module": "NodeNext",
+    "outDir": "lib",
+    "sourceMap": true,
+    "declaration": true,
+    "rootDir": "src",
+    "typeRoots": ["./src/types", "./node_modules/@types"]
+  },
+  "include": ["src"],
+  "references": [{ "path": "../packages/api" }]
+}

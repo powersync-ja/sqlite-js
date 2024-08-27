@@ -1,0 +1,21 @@
+{
+  "name": "benchmarks",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "NODE_OPTIONS=\"--experimental-sqlite --disable-warning=ExperimentalWarning\" node lib/index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "prando": "^6.0.1",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "@sqlite-js/driver": "workspace:^",
+    "@sqlite-js/better-sqlite3-driver": "workspace:^",
+    "@sqlite-js/api": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "typescript": "^5.4.5"
+  }
+}
