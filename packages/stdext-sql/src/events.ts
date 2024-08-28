@@ -41,7 +41,7 @@ export interface SqlErrorEventInit<
  */
 export interface SqlConnectionEventInit<
   Connection extends SqlConnection = SqlConnection
-> extends EventInit {
+> extends Event {
   connection: Connection;
 }
 
@@ -54,7 +54,7 @@ export interface SqlConnectionEventInit<
  */
 export class SqlErrorEvent<
   EventInit extends SqlErrorEventInit = SqlErrorEventInit
-> extends ErrorEvent {
+> extends Event {
   constructor(type: 'error', eventInitDict?: EventInit) {
     super(type, eventInitDict);
   }
