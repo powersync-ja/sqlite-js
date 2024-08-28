@@ -27,36 +27,31 @@ export class SqliteConnection
       SqliteQueryOptions
     >
 {
-  public driver: SqliteDriverConnection | undefined;
-  public readonly pool: SqliteDriverConnectionPool;
+  public driver: SqliteDriverConnection;
   public readonly connectionUrl: string;
-  private reserved: ReservedConnection | undefined;
 
   get connected(): boolean {
-    // TODO: implement
-    return true;
+    return this.driver != null;
   }
 
   public readonly options: SqliteConnectionOptions;
 
   constructor(
     connectionUrl: string,
-    pool: SqliteDriverConnectionPool,
+    driver: SqliteDriverConnection,
     options?: SqliteConnectionOptions
   ) {
     this.connectionUrl = connectionUrl;
-    this.pool = pool;
+    this.driver = driver;
     this.options = options ?? {};
   }
 
   async connect(): Promise<void> {
-    this.reserved = await this.pool.reserveConnection();
-    this.driver = this.reserved.connection;
+    // We're always connected
   }
 
   async close(): Promise<void> {
-    await this.reserved?.release();
-    await this.pool.close();
+    await this.driver.close();
   }
 
   async execute(

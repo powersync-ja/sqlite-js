@@ -2,7 +2,10 @@ import type {
   ArrayRow,
   Row,
   SqlClient,
+  SqlClientPool,
   SqlConnectionOptions,
+  SqlPoolClient,
+  SqlPoolClientOptions,
   SqlPreparable,
   SqlPreparedStatement,
   SqlQueriable,
@@ -16,6 +19,7 @@ import type { DatabaseOpenOptions } from './database.js';
 import {
   SqliteCloseEvent,
   SqliteConnectEvent,
+  SqliteEvents,
   SqliteEventTarget
 } from './events.js';
 import {
@@ -26,6 +30,7 @@ import {
 import { SqliteTransactionError } from './errors.js';
 import { mergeQueryOptions, transformToAsyncGenerator } from './util.js';
 import {
+  ReservedConnection,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
   SqliteDriverStatement,
@@ -437,33 +442,42 @@ export class SqliteTransactionable
   }
 }
 
-/**
- * Sqlite client
- */
-export class SqliteClient
+class SqlitePoolClient
   extends SqliteTransactionable
   implements
-    SqlClient<
-      SqliteEventTarget,
+    SqlPoolClient<
       SqliteConnectionOptions,
+      SqliteConnection,
       SqliteParameterType,
       SqliteQueryOptions,
-      SqliteConnection,
       SqlitePreparedStatement,
       SqliteTransactionOptions,
       SqliteTransaction
     >
 {
   readonly eventTarget: SqliteEventTarget;
+  readonly reserved: ReservedConnection;
+  readonly connectionUrl: string;
 
   constructor(
     connectionUrl: string,
-    driver: SqliteDriverConnectionPool,
+    reserved: ReservedConnection,
     options: SqliteClientOptions = {}
   ) {
-    const conn = new SqliteConnection(connectionUrl, driver, options);
+    const conn = new SqliteConnection(
+      connectionUrl,
+      reserved.connection,
+      options
+    );
     super(conn, options);
+    this.reserved = reserved;
+    this.connectionUrl = connectionUrl;
     this.eventTarget = new SqliteEventTarget();
+  }
+  disposed: boolean = false;
+  async release(): Promise<void> {
+    this.disposed = true;
+    await this.reserved.release();
   }
 
   async connect(): Promise<void> {
@@ -478,6 +492,69 @@ export class SqliteClient
       new SqliteCloseEvent({ connection: this.connection } as any)
     );
     await this.connection.close();
+  }
+
+  async [Symbol.asyncDispose](): Promise<void> {
+    await this.close();
+  }
+}
+
+/**
+ * Sqlite client
+ */
+export class SqliteClientPool
+  implements
+    SqlClientPool<
+      SqliteConnectionOptions,
+      SqliteParameterType,
+      SqliteQueryOptions,
+      SqliteConnection,
+      SqlitePreparedStatement,
+      SqliteTransactionOptions,
+      SqliteTransaction
+    >
+{
+  readonly eventTarget: SqliteEventTarget;
+
+  readonly connectionUrl: string;
+  readonly pool: SqliteDriverConnectionPool;
+  readonly options: SqliteClientOptions;
+  readonly connected = true;
+
+  constructor(
+    connectionUrl: string,
+    pool: SqliteDriverConnectionPool,
+    options: SqliteClientOptions = {}
+  ) {
+    this.pool = pool;
+    this.connectionUrl = connectionUrl;
+    this.options = options;
+    this.eventTarget = new SqliteEventTarget();
+  }
+
+  async acquire(): Promise<
+    SqlPoolClient<
+      SqliteConnectionOptions,
+      SqliteConnection,
+      SqliteValue,
+      SqliteQueryOptions,
+      SqlitePreparedStatement,
+      SqliteTransactionOptions,
+      SqliteTransaction,
+      SqlPoolClientOptions
+    >
+  > {
+    const reserved = await this.pool.reserveConnection();
+    return new SqlitePoolClient(this.connectionUrl, reserved, this.options);
+  }
+
+  async connect(): Promise<void> {
+    // No-op
+  }
+
+  async close(): Promise<void> {
+    // TODO: this.eventTarget.dispatchEvent(new SqliteCloseEvent({}));
+    await this.pool.close();
   }
 
   async [Symbol.asyncDispose](): Promise<void> {

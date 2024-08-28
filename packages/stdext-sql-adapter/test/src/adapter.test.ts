@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { assert, test } from 'vitest';
-import { BetterSqliteClient, SqliteClient } from '../../lib/index.js';
+import { BetterSqliteClient, SqliteClientPool } from '../../lib/index.js';
 
 const assertEquals = assert.deepEqual;
 
@@ -12,8 +12,8 @@ test('sqlite', async () => {
   // Remove any existing test.db.
   await fs.rm(path).catch(() => {});
 
-  let db: SqliteClient = new BetterSqliteClient(path);
-  await db.connect();
+  let pool: SqliteClientPool = new BetterSqliteClient(path);
+  let db = await pool.acquire();
   await db.execute('pragma journal_mode = WAL');
   await db.execute('pragma synchronous = normal');
   assertEquals(await db.execute('pragma temp_store = memory'), 0);
