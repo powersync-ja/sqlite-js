@@ -1,19 +1,31 @@
 import * as fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { assert, test } from 'vitest';
-import { BetterSqliteClient, SqliteClientPool } from '../../lib/index.js';
+import {
+  BetterSqliteClient,
+  BetterSqliteClientPool,
+  SqliteClient,
+  SqliteClientPool
+} from '../../lib/index.js';
 
 const assertEquals = assert.deepEqual;
 
 test('sqlite', async () => {
-  const DB_URL = new URL('./test.db', import.meta.url);
+  const DB_URL = new URL('../../test.db', import.meta.url);
   const path = fileURLToPath(DB_URL);
 
   // Remove any existing test.db.
   await fs.rm(path).catch(() => {});
+  await fs.rm(path + '-shm').catch(() => {});
+  await fs.rm(path + '-wal').catch(() => {});
 
-  let pool: SqliteClientPool = new BetterSqliteClient(path);
-  let db = await pool.acquire();
+  // To test the pool:
+  // let pool: SqliteClientPool = new BetterSqliteClientPool(path);
+  // let db = await pool.acquire();
+
+  let db: SqliteClient = new BetterSqliteClient(path);
+  await db.connect();
+
   await db.execute('pragma journal_mode = WAL');
   await db.execute('pragma synchronous = normal');
   assertEquals(await db.execute('pragma temp_store = memory'), 0);

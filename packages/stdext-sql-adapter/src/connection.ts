@@ -27,7 +27,8 @@ export class SqliteConnection
       SqliteQueryOptions
     >
 {
-  public driver: SqliteDriverConnection;
+  public driver: SqliteDriverConnection | undefined;
+
   public readonly connectionUrl: string;
 
   get connected(): boolean {
@@ -38,7 +39,7 @@ export class SqliteConnection
 
   constructor(
     connectionUrl: string,
-    driver: SqliteDriverConnection,
+    driver: SqliteDriverConnection | undefined,
     options?: SqliteConnectionOptions
   ) {
     this.connectionUrl = connectionUrl;
@@ -47,11 +48,11 @@ export class SqliteConnection
   }
 
   async connect(): Promise<void> {
-    // We're always connected
+    // No-op
   }
 
   async close(): Promise<void> {
-    await this.driver.close();
+    await this.driver?.close();
   }
 
   async execute(
@@ -124,6 +125,29 @@ export class SqliteConnection
 
   async [Symbol.asyncDispose](): Promise<void> {
     await this.close();
+  }
+}
+
+export class SqliteReservedConnection extends SqliteConnection {
+  #connect: () => Promise<ReservedConnection>;
+  #reserved: ReservedConnection | undefined;
+
+  constructor(
+    connectionUrl: string,
+    connect: () => Promise<ReservedConnection>,
+    options?: SqliteConnectionOptions
+  ) {
+    super(connectionUrl, undefined, options);
+    this.#connect = connect;
+  }
+
+  async connect(): Promise<void> {
+    this.#reserved = await this.#connect();
+    this.driver = this.#reserved.connection;
+  }
+
+  async close(): Promise<void> {
+    await this.#reserved?.release();
   }
 }
 

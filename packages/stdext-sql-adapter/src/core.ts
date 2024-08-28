@@ -25,6 +25,7 @@ import {
 import {
   SqliteConnectable,
   SqliteConnection,
+  SqliteReservedConnection,
   type SqliteConnectionOptions
 } from './connection.js';
 import { SqliteTransactionError } from './errors.js';
@@ -439,6 +440,57 @@ export class SqliteTransactionable
       );
       throw error;
     }
+  }
+}
+
+/**
+ * Single-connection client. Not safe to use concurrently.
+ */
+export class SqliteClient
+  extends SqliteTransactionable
+  implements
+    SqlClient<
+      SqliteEventTarget,
+      SqliteConnectionOptions,
+      SqliteParameterType,
+      SqliteQueryOptions,
+      SqliteConnection,
+      SqlitePreparedStatement,
+      SqliteTransactionOptions,
+      SqliteTransaction
+    >
+{
+  readonly eventTarget: SqliteEventTarget;
+
+  constructor(
+    connectionUrl: string,
+    pool: SqliteDriverConnectionPool,
+    options: SqliteClientOptions = {}
+  ) {
+    const connect = () => {
+      return pool.reserveConnection();
+    };
+    const conn = new SqliteReservedConnection(connectionUrl, connect, options);
+    super(conn, options);
+    this.eventTarget = new SqliteEventTarget();
+  }
+
+  async connect(): Promise<void> {
+    await this.connection.connect();
+    this.eventTarget.dispatchEvent(
+      new SqliteConnectEvent({ connection: this.connection } as any)
+    );
+  }
+
+  async close(): Promise<void> {
+    this.eventTarget.dispatchEvent(
+      new SqliteCloseEvent({ connection: this.connection } as any)
+    );
+    await this.connection.close();
+  }
+
+  async [Symbol.asyncDispose](): Promise<void> {
+    await this.close();
   }
 }
 
