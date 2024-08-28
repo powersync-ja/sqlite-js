@@ -5,7 +5,6 @@ import type {
   SqlClientPool,
   SqlConnectionOptions,
   SqlPoolClient,
-  SqlPoolClientOptions,
   SqlPreparable,
   SqlPreparedStatement,
   SqlQueriable,
@@ -15,28 +14,26 @@ import type {
   SqlTransactionOptions
 } from '@stdext/sql';
 
-import type { DatabaseOpenOptions } from './database.js';
 import {
-  SqliteCloseEvent,
-  SqliteConnectEvent,
-  SqliteEvents,
-  SqliteEventTarget
-} from './events.js';
+  ReservedConnection,
+  SqliteDriverConnectionPool,
+  SqliteDriverStatement,
+  SqliteValue
+} from '@sqlite-js/driver';
 import {
   SqliteConnectable,
   SqliteConnection,
   SqliteReservedConnection,
   type SqliteConnectionOptions
 } from './connection.js';
+import type { DatabaseOpenOptions } from './database.js';
 import { SqliteTransactionError } from './errors.js';
-import { mergeQueryOptions, transformToAsyncGenerator } from './util.js';
 import {
-  ReservedConnection,
-  SqliteDriverConnection,
-  SqliteDriverConnectionPool,
-  SqliteDriverStatement,
-  SqliteValue
-} from '@sqlite-js/driver';
+  SqliteCloseEvent,
+  SqliteConnectEvent,
+  SqliteEventTarget
+} from './events.js';
+import { mergeQueryOptions } from './util.js';
 
 export type SqliteParameterType = SqliteValue;
 export type BindValue = SqliteValue;
@@ -60,13 +57,7 @@ export interface SqliteClientOptions
 
 export class SqlitePreparedStatement
   extends SqliteConnectable
-  implements
-    SqlPreparedStatement<
-      SqliteConnectionOptions,
-      SqliteParameterType,
-      SqliteQueryOptions,
-      SqliteConnection
-    >
+  implements SqlPreparedStatement
 {
   readonly sql: string;
   declare readonly options: SqliteConnectionOptions & SqliteQueryOptions;
@@ -221,16 +212,7 @@ export class SqlitePreparedStatement
 /**
  * Represents a base queriable class for SQLite3.
  */
-export class SqliteQueriable
-  extends SqliteConnectable
-  implements
-    SqlQueriable<
-      SqliteConnectionOptions,
-      SqliteParameterType,
-      SqliteQueryOptions,
-      SqliteConnection
-    >
-{
+export class SqliteQueriable extends SqliteConnectable implements SqlQueriable {
   declare readonly options: SqliteConnectionOptions & SqliteQueryOptions;
 
   constructor(
@@ -323,26 +305,11 @@ export class SqliteQueriable
 
 export class SqlitePreparable
   extends SqliteQueriable
-  implements
-    SqlPreparable<
-      SqliteConnectionOptions,
-      SqliteParameterType,
-      SqliteQueryOptions,
-      SqliteConnection,
-      SqlitePreparedStatement
-    > {}
+  implements SqlPreparable {}
 
 export class SqliteTransaction
   extends SqliteQueriable
-  implements
-    SqlTransaction<
-      SqliteConnectionOptions,
-      SqliteParameterType,
-      SqliteQueryOptions,
-      SqliteConnection,
-      SqlitePreparedStatement,
-      SqliteTransactionOptions
-    >
+  implements SqlTransaction
 {
   #inTransaction: boolean = true;
   get inTransaction(): boolean {
@@ -399,16 +366,7 @@ export class SqliteTransaction
  */
 export class SqliteTransactionable
   extends SqlitePreparable
-  implements
-    SqlTransactionable<
-      SqliteConnectionOptions,
-      SqliteParameterType,
-      SqliteQueryOptions,
-      SqliteConnection,
-      SqlitePreparedStatement,
-      SqliteTransactionOptions,
-      SqliteTransaction
-    >
+  implements SqlTransactionable
 {
   async beginTransaction(
     options?: SqliteTransactionOptions['beginTransactionOptions']
@@ -446,20 +404,7 @@ export class SqliteTransactionable
 /**
  * Single-connection client. Not safe to use concurrently.
  */
-export class SqliteClient
-  extends SqliteTransactionable
-  implements
-    SqlClient<
-      SqliteEventTarget,
-      SqliteConnectionOptions,
-      SqliteParameterType,
-      SqliteQueryOptions,
-      SqliteConnection,
-      SqlitePreparedStatement,
-      SqliteTransactionOptions,
-      SqliteTransaction
-    >
-{
+export class SqliteClient extends SqliteTransactionable implements SqlClient {
   readonly eventTarget: SqliteEventTarget;
 
   constructor(
@@ -554,18 +499,7 @@ class SqlitePoolClient
 /**
  * Sqlite client
  */
-export class SqliteClientPool
-  implements
-    SqlClientPool<
-      SqliteConnectionOptions,
-      SqliteParameterType,
-      SqliteQueryOptions,
-      SqliteConnection,
-      SqlitePreparedStatement,
-      SqliteTransactionOptions,
-      SqliteTransaction
-    >
-{
+export class SqliteClientPool implements SqlClientPool {
   readonly eventTarget: SqliteEventTarget;
 
   readonly connectionUrl: string;
@@ -584,18 +518,7 @@ export class SqliteClientPool
     this.eventTarget = new SqliteEventTarget();
   }
 
-  async acquire(): Promise<
-    SqlPoolClient<
-      SqliteConnectionOptions,
-      SqliteConnection,
-      SqliteValue,
-      SqliteQueryOptions,
-      SqlitePreparedStatement,
-      SqliteTransactionOptions,
-      SqliteTransaction,
-      SqlPoolClientOptions
-    >
-  > {
+  async acquire(): Promise<SqlPoolClient> {
     const reserved = await this.pool.reserveConnection();
     return new SqlitePoolClient(this.connectionUrl, reserved, this.options);
   }

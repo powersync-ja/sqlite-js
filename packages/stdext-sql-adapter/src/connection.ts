@@ -19,14 +19,7 @@ export interface SqliteConnectionOptions
   extends SqlConnectionOptions,
     DatabaseOpenOptions {}
 
-export class SqliteConnection
-  implements
-    SqlConnection<
-      SqliteConnectionOptions,
-      SqliteParameterType,
-      SqliteQueryOptions
-    >
-{
+export class SqliteConnection implements SqlConnection {
   public driver: SqliteDriverConnection | undefined;
 
   public readonly connectionUrl: string;
@@ -147,6 +140,7 @@ export class SqliteReservedConnection extends SqliteConnection {
   }
 
   async close(): Promise<void> {
+    this.driver = undefined;
     await this.#reserved?.release();
   }
 }
