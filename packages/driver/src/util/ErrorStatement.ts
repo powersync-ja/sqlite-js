@@ -46,13 +46,13 @@ export class ErrorStatement implements SqliteDriverStatement {
   async *stream(
     parameters: SqliteParameterBinding,
     options: StreamQueryOptions
-  ): AsyncIterator<SqliteObjectRow[]> {
+  ): AsyncIterableIterator<SqliteObjectRow[]> {
     throw this.error;
   }
   async *streamArray(
     parameters: SqliteParameterBinding,
     options: StreamQueryOptions
-  ): AsyncIterator<SqliteArrayRow[]> {
+  ): AsyncIterableIterator<SqliteArrayRow[]> {
     throw this.error;
   }
 

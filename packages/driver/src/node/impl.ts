@@ -114,7 +114,7 @@ class NodeSqliteSyncStatement implements InternalStatement {
   async *stream(
     parameters: SqliteParameterBinding,
     options: StreamQueryOptions
-  ): AsyncIterator<SqliteObjectRow[]> {
+  ): AsyncIterableIterator<SqliteObjectRow[]> {
     const rows = await this.all(parameters, options);
     yield rows;
   }
@@ -122,7 +122,7 @@ class NodeSqliteSyncStatement implements InternalStatement {
   streamArray(
     parameters: SqliteParameterBinding,
     options: StreamQueryOptions
-  ): AsyncIterator<SqliteArrayRow[]> {
+  ): AsyncIterableIterator<SqliteArrayRow[]> {
     throw new Error('array rows are not supported');
   }
 

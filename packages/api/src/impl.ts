@@ -54,11 +54,8 @@ export class ConnectionPoolImpl
     throw new Error('Method not implemented.');
   }
 
-  prepare<T extends SqliteObjectRow>(
-    sql: string,
-    args?: SqliteArguments
-  ): PreparedQuery<T> {
-    return new ConnectionPoolPreparedQueryImpl<T>(this, sql, args);
+  prepare<T extends SqliteObjectRow>(sql: string): PreparedQuery<T> {
+    return new ConnectionPoolPreparedQueryImpl<T>(this, sql);
   }
 
   pipeline(options?: ReserveConnectionOptions | undefined): QueryPipeline {
@@ -202,12 +199,8 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     }
   }
 
-  prepare<T extends SqliteObjectRow>(
-    sql: string,
-    args?: SqliteArguments,
-    options?: QueryOptions
-  ): PreparedQuery<T> {
-    return this.connection.prepare(sql, args, options);
+  prepare<T extends SqliteObjectRow>(sql: string): PreparedQuery<T> {
+    return this.connection.prepare(sql);
   }
 
   pipeline(): QueryPipeline {
@@ -294,12 +287,12 @@ export class ConnectionImpl implements SqliteConnection {
   constructor(private driver: SqliteDriverConnection) {}
 
   private init() {
-    this._beginExclusive ??= this.prepare('BEGIN EXCLUSIVE', undefined, {
+    this._beginExclusive ??= this.prepare('BEGIN EXCLUSIVE', {
       autoFinalize: true
     });
-    this._begin ??= this.prepare('BEGIN', undefined, { autoFinalize: true });
-    this.commit ??= this.prepare('COMMIT', undefined, { autoFinalize: true });
-    this.rollback ??= this.prepare('ROLLBACK', undefined, {
+    this._begin ??= this.prepare('BEGIN', { autoFinalize: true });
+    this.commit ??= this.prepare('COMMIT', { autoFinalize: true });
+    this.rollback ??= this.prepare('ROLLBACK', {
       autoFinalize: true
     });
   }
@@ -366,20 +359,10 @@ export class ConnectionImpl implements SqliteConnection {
 
   prepare<T extends SqliteObjectRow>(
     sql: string,
-    args?: SqliteArguments,
     options?: PrepareOptions
   ): PreparedQuery<T> {
     const statement = this.driver.prepare(sql, options);
-    if (args) {
-      statement.bind(args);
-    }
-    return new ConnectionPreparedQueryImpl(
-      this,
-      this.driver,
-      statement,
-      sql,
-      args
-    );
+    return new ConnectionPreparedQueryImpl(this, this.driver, statement, sql);
   }
 
   pipeline(): QueryPipeline {
@@ -388,34 +371,22 @@ export class ConnectionImpl implements SqliteConnection {
 
   async run(query: string, args: SqliteArguments): Promise<RunResult> {
     using statement = this.driver.prepare(query);
-    if (args != null) {
-      statement.bind(args);
-    }
-    return await statement.run();
+    return await statement.run(args);
   }
 
   async *stream<T extends SqliteObjectRow>(
-    query: string | PreparedQuery<T>,
+    query: string,
     args: SqliteArguments | undefined,
     options?: StreamOptions | undefined
   ): AsyncGenerator<T[], void, unknown> {
-    using statement = this.driver.prepare(query as string, {
+    using statement = this.driver.prepare(query);
+    const chunkSize = options?.chunkSize;
+
+    const iter = statement.stream(args, {
+      chunkMaxRows: chunkSize,
       bigint: options?.bigint
     });
-    if (args != null) {
-      statement.bind(args);
-    }
-    const chunkSize = options?.chunkSize ?? 100;
-
-    while (true) {
-      const { rows, done } = await statement.step(chunkSize);
-      if (rows != null) {
-        yield rows as T[];
-      }
-      if (done) {
-        break;
-      }
-    }
+    yield* iter as AsyncGenerator<T[], void, unknown>;
   }
 
   async select<T extends SqliteObjectRow>(
@@ -423,14 +394,8 @@ export class ConnectionImpl implements SqliteConnection {
     args?: SqliteArguments,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
   ): Promise<T[]> {
-    using statement = this.driver.prepare(query, {
-      bigint: options?.bigint,
-      rawResults: false
-    });
-    if (args != null) {
-      statement.bind(args);
-    }
-    const { rows } = await statement.step();
+    using statement = this.driver.prepare(query);
+    const rows = await statement.all(args, { bigint: options?.bigint });
     return rows as T[];
   }
 
@@ -469,12 +434,8 @@ export class TransactionImpl implements SqliteTransaction {
     await this.con.rollback!.select();
   }
 
-  prepare<T extends SqliteObjectRow>(
-    sql: string,
-    args?: SqliteArguments,
-    options?: QueryOptions
-  ): PreparedQuery<T> {
-    const q = this.con.prepare<T>(sql, args, options);
+  prepare<T extends SqliteObjectRow>(sql: string): PreparedQuery<T> {
+    const q = this.con.prepare<T>(sql);
     // FIXME: auto-dispose these after transaction commit / rollback
     this.preparedQueries.push(q);
     return q;
@@ -601,8 +562,7 @@ class ConnectionPoolPreparedQueryImpl<T extends SqliteObjectRow>
 
   constructor(
     private context: ConnectionPoolImpl,
-    public sql: string,
-    public args: SqliteArguments
+    public sql: string
   ) {
     if (typeof Symbol.dispose != 'undefined') {
       this[Symbol.dispose] = () => this.dispose();
@@ -663,7 +623,7 @@ class ConnectionPoolPreparedQueryImpl<T extends SqliteObjectRow>
     const cimpl = connection as ConnectionImpl;
     let sub = this.byConnection.get(cimpl);
     if (sub == null) {
-      sub = cimpl.prepare(this.sql, this.args);
+      sub = cimpl.prepare(this.sql);
       this.byConnection.set(cimpl, sub);
     }
     return sub;
@@ -681,8 +641,7 @@ class ConnectionPreparedQueryImpl<T extends SqliteObjectRow>
     private context: ConnectionImpl,
     private driver: SqliteDriverConnection,
     public statement: SqliteDriverStatement,
-    public sql: string,
-    public args: SqliteArguments
+    public sql: string
   ) {
     if (typeof Symbol.dispose != 'undefined') {
       this[Symbol.dispose] = () => this.dispose();
@@ -700,42 +659,22 @@ class ConnectionPreparedQueryImpl<T extends SqliteObjectRow>
     args?: SqliteArguments,
     options?: StreamOptions | undefined
   ): AsyncGenerator<T[], any, unknown> {
-    const chunkSize = options?.chunkSize ?? 10;
-    if (args != null) {
-      this.statement.bind(args);
-    }
-    try {
-      while (true) {
-        const { rows, done } = await this.statement.step(chunkSize);
-        if (rows != null) {
-          yield rows as T[];
-        }
-        if (done) {
-          break;
-        }
-      }
-    } finally {
-      this.statement.reset();
+    const chunkSize = options?.chunkSize;
+    const iter = this.statement.stream(args, {
+      chunkMaxRows: chunkSize
+    });
+    for await (let chunk of iter) {
+      yield chunk as T[];
     }
   }
 
   async run(args?: SqliteArguments): Promise<RunResult> {
-    if (args != null) {
-      this.statement.bind(args);
-    }
-    return await this.statement.run();
+    return await this.statement.run(args);
   }
 
   async select(args?: SqliteArguments): Promise<T[]> {
-    try {
-      if (args != null) {
-        this.statement.bind(args);
-      }
-      const { rows } = await this.statement.step();
-      return rows as T[];
-    } finally {
-      this.statement.reset();
-    }
+    const rows = await this.statement.all(args);
+    return rows as T[];
   }
 
   dispose(): void {
@@ -753,19 +692,14 @@ class QueryPipelineImpl implements QueryPipeline {
     this.count += 1;
     if (typeof query == 'string') {
       using statement = this.driver.prepare(query);
-      if (args) {
-        statement.bind(args);
-      }
-      this.lastPromise = statement.step(undefined, {
+      this.lastPromise = statement.run(args, {
         requireTransaction: true
       });
     } else if (query instanceof ConnectionPreparedQueryImpl) {
       const statement = query.statement;
-      statement.bind(args ?? []);
-      this.lastPromise = statement.step(undefined, {
+      this.lastPromise = statement.run(args, {
         requireTransaction: true
       });
-      statement.reset();
     } else {
       throw new Error('not implemented yet');
     }

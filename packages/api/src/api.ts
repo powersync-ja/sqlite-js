@@ -61,11 +61,7 @@ export interface ReservedSqliteConnection extends SqliteConnection {
 }
 
 export interface QueryInterface {
-  prepare<T extends SqliteObjectRow>(
-    query: string,
-    args?: SqliteArguments,
-    options?: QueryOptions
-  ): PreparedQuery<T>;
+  prepare<T extends SqliteObjectRow>(query: string): PreparedQuery<T>;
 
   run(
     query: string,

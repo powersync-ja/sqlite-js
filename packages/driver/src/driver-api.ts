@@ -61,11 +61,11 @@ export interface SqliteDriverStatement {
   stream(
     parameters?: SqliteParameterBinding,
     options?: StreamQueryOptions
-  ): AsyncIterator<SqliteObjectRow[]>;
+  ): AsyncIterableIterator<SqliteObjectRow[]>;
   streamArray(
     parameters?: SqliteParameterBinding,
     options?: StreamQueryOptions
-  ): AsyncIterator<SqliteArrayRow[]>;
+  ): AsyncIterableIterator<SqliteArrayRow[]>;
 
   /**
    * Run a query, and return the number of changed rows, and last insert id.

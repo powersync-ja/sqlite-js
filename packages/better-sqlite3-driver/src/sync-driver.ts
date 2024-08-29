@@ -69,10 +69,15 @@ class BetterSqlitePreparedStatement implements InternalStatement {
 
     const statement = this.statement;
 
-    statement.safeIntegers(options?.bigint ?? false);
-    statement.raw(array);
-    const r = statement.all(sanitizeParameters(parameters));
-    return r;
+    if (statement.reader) {
+      statement.safeIntegers(options?.bigint ?? false);
+      statement.raw(array);
+      const rows = statement.all(sanitizeParameters(parameters));
+      return rows;
+    } else {
+      statement.run(sanitizeParameters(parameters));
+      return [];
+    }
   }
 
   async all(
@@ -106,8 +111,13 @@ class BetterSqlitePreparedStatement implements InternalStatement {
 
     const statement = this.statement;
 
-    statement.safeIntegers(options?.bigint ?? false);
-    statement.raw(array);
+    if (statement.reader) {
+      statement.safeIntegers(options?.bigint ?? false);
+      statement.raw(array);
+    } else {
+      statement.run(sanitizeParameters(parameters));
+      return;
+    }
     const iter = statement.iterate(sanitizeParameters(parameters));
     const maxBuffer = options?.chunkMaxRows ?? 100;
     let buffer: any[] = [];
@@ -118,12 +128,15 @@ class BetterSqlitePreparedStatement implements InternalStatement {
         buffer = [];
       }
     }
+    if (buffer.length > 0) {
+      yield buffer;
+    }
   }
 
   async *stream(
     parameters?: SqliteParameterBinding,
     options?: StreamQueryOptions
-  ): AsyncIterator<SqliteObjectRow[]> {
+  ): AsyncIterableIterator<SqliteObjectRow[]> {
     try {
       yield* this._stream(parameters, options, false);
     } catch (e) {
@@ -134,7 +147,7 @@ class BetterSqlitePreparedStatement implements InternalStatement {
   async *streamArray(
     parameters?: SqliteParameterBinding,
     options?: StreamQueryOptions
-  ): AsyncIterator<SqliteArrayRow[]> {
+  ): AsyncIterableIterator<SqliteArrayRow[]> {
     try {
       yield* this._stream(parameters, options, true);
     } catch (e) {

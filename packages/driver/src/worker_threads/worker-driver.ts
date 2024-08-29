@@ -226,14 +226,14 @@ class WorkerDriverStatement implements SqliteDriverStatement {
   stream(
     parameters: SqliteParameterBinding,
     options?: StreamQueryOptions
-  ): AsyncIterator<SqliteObjectRow[]> {
+  ): AsyncIterableIterator<SqliteObjectRow[]> {
     throw new Error('Method not implemented.');
   }
 
   streamArray(
     parameters: SqliteParameterBinding,
     options?: StreamQueryOptions
-  ): AsyncIterator<SqliteArrayRow[]> {
+  ): AsyncIterableIterator<SqliteArrayRow[]> {
     throw new Error('Method not implemented.');
   }
 
