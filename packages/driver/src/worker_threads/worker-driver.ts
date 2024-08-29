@@ -1,16 +1,15 @@
 import * as worker_threads from 'worker_threads';
 import {
   PrepareOptions,
-  ResetOptions,
-  SqliteDriverConnection,
-  SqliteDriverStatement,
-  SqliteParameterBinding,
-  SqliteChanges,
-  UpdateListener,
   QueryOptions,
   SqliteArrayRow,
+  SqliteChanges,
+  SqliteDriverConnection,
+  SqliteDriverStatement,
   SqliteObjectRow,
-  StreamQueryOptions
+  SqliteParameterBinding,
+  StreamQueryOptions,
+  UpdateListener
 } from '../driver-api.js';
 
 import { Deferred } from '../deferred.js';

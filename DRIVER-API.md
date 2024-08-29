@@ -110,10 +110,6 @@ Returning an array of cells for each row, along with a separate "columns" array,
 
 However, many current SQLite bindings do not expose the raw array calls. Even if they do, this path may be slower than using objects from the start. Since using the results as an array is quite rare in practice, this is left as an optional configuration, rather than a requirement for the all queries.
 
-### Separate bind/step/reset
-
-This allows a lot of flexibility, for example partial rebinding of parameters instead of specifying all parameters each time a prepared statement is used. However, those type of use cases are rare, and this is not important in the overall architecture. These could all be combined into a single "query with parameters" call, but would need to take into account optional streaming of results.
-
 ### bigint
 
 SQLite supports up to 8-byte signed integers (up to 2^64-1), while JavaScript's number is limited to 2^53-1. General approaches include:

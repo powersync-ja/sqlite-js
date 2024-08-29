@@ -12,10 +12,6 @@ export interface PrepareOptions {
   autoFinalize?: boolean;
 }
 
-export interface ResetOptions {
-  clearBindings?: boolean;
-}
-
 export interface SqliteDriverConnection {
   /**
    * Prepare a statement.
@@ -49,19 +45,43 @@ export interface StreamQueryOptions extends QueryOptions {
 }
 
 export interface SqliteDriverStatement {
+  /**
+   * Run a query, and return results as an array of row objects.
+   *
+   * If the query does not return results, an empty array is returned.
+   */
   all(
     parameters?: SqliteParameterBinding,
     options?: QueryOptions
   ): Promise<SqliteObjectRow[]>;
+
+  /**
+   * Run a query, and return results as an array of row arrays.
+   *
+   * If the query does not return results, an empty array is returned.
+   */
   allArray(
     parameters?: SqliteParameterBinding,
     options?: QueryOptions
   ): Promise<SqliteArrayRow[]>;
 
+  /**
+   * Run a query, and return as an iterator of array of row object chunks.
+   *
+   * It is an error to call any other query methods on the same statement
+   * before the iterator has returned.
+   */
   stream(
     parameters?: SqliteParameterBinding,
     options?: StreamQueryOptions
   ): AsyncIterableIterator<SqliteObjectRow[]>;
+
+  /**
+   * Run a query, and return as an iterator of array of row array chunks.
+   *
+   * It is an error to call any other query methods on the same statement
+   * before the iterator has returned.
+   */
   streamArray(
     parameters?: SqliteParameterBinding,
     options?: StreamQueryOptions
@@ -75,6 +95,9 @@ export interface SqliteDriverStatement {
     options?: QueryOptions
   ): Promise<SqliteChanges>;
 
+  /**
+   * Get the column names of the data returned by the query.
+   */
   getColumns(): Promise<string[]>;
 
   finalize(): void;
@@ -86,7 +109,6 @@ export interface SqliteDriverConnectionPool {
    * Reserve a connection for exclusive use.
    *
    * If there is no available connection, this will wait until one is available.
-   * @param options
    */
   reserveConnection(
     options?: ReserveConnectionOptions
