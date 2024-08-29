@@ -31,25 +31,25 @@ export class ErrorStatement implements SqliteDriverStatement {
     this.persisted = options.autoFinalize ?? false;
   }
 
-  all(
+  async all(
     parameters: SqliteParameterBinding,
     options: QueryOptions
   ): Promise<SqliteObjectRow[]> {
     throw this.error;
   }
-  allArray(
+  async allArray(
     parameters: SqliteParameterBinding,
     options: QueryOptions
   ): Promise<SqliteArrayRow[]> {
     throw this.error;
   }
-  stream(
+  async *stream(
     parameters: SqliteParameterBinding,
     options: StreamQueryOptions
   ): AsyncIterator<SqliteObjectRow[]> {
     throw this.error;
   }
-  streamArray(
+  async *streamArray(
     parameters: SqliteParameterBinding,
     options: StreamQueryOptions
   ): AsyncIterator<SqliteArrayRow[]> {

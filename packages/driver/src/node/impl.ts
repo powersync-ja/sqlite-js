@@ -187,7 +187,9 @@ export class NodeSqliteConnection implements SqliteDriverConnection {
 }
 
 function convertParameters(parameters: SqliteParameterBinding): any[] {
-  if (Array.isArray(parameters)) {
+  if (parameters == null) {
+    return [];
+  } else if (Array.isArray(parameters)) {
     return parameters;
   } else {
     return [parameters];

@@ -1,4 +1,4 @@
-import { SqliteArguments, SqliteRowObject } from '@sqlite-js/driver';
+import { SqliteArguments, SqliteObjectRow } from '@sqlite-js/driver';
 
 export type SqliteDatabase = SqliteConnectionPool & SqliteConnection;
 
@@ -61,7 +61,7 @@ export interface ReservedSqliteConnection extends SqliteConnection {
 }
 
 export interface QueryInterface {
-  prepare<T extends SqliteRowObject>(
+  prepare<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments,
     options?: QueryOptions
@@ -73,7 +73,7 @@ export interface QueryInterface {
     options?: ReserveConnectionOptions
   ): Promise<RunResult>;
 
-  stream<T extends SqliteRowObject>(
+  stream<T extends SqliteObjectRow>(
     query: string,
     args: SqliteArguments,
     options?: StreamOptions & ReserveConnectionOptions
@@ -84,7 +84,7 @@ export interface QueryInterface {
    *
    * When called on a connection pool, uses readonly: true by default.
    */
-  select<T extends SqliteRowObject>(
+  select<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments,
     options?: QueryOptions & ReserveConnectionOptions
@@ -99,7 +99,7 @@ export interface QueryInterface {
    * @param args
    * @param options
    */
-  get<T extends SqliteRowObject>(
+  get<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments,
     options?: QueryOptions & ReserveConnectionOptions
@@ -114,7 +114,7 @@ export interface QueryInterface {
    * @param args
    * @param options
    */
-  getOptional<T extends SqliteRowObject>(
+  getOptional<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments,
     options?: QueryOptions & ReserveConnectionOptions
@@ -236,7 +236,7 @@ export interface RunResult {
   lastInsertRowId: bigint;
 }
 
-export interface PreparedQuery<T extends SqliteRowObject> {
+export interface PreparedQuery<T extends SqliteObjectRow> {
   parse(): Promise<{ columns: string[] }>;
 
   /**

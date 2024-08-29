@@ -26,7 +26,7 @@ import {
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
   SqliteDriverStatement,
-  SqliteRowObject
+  SqliteObjectRow
 } from '@sqlite-js/driver';
 
 export class ConnectionPoolImpl
@@ -54,7 +54,7 @@ export class ConnectionPoolImpl
     throw new Error('Method not implemented.');
   }
 
-  prepare<T extends SqliteRowObject>(
+  prepare<T extends SqliteObjectRow>(
     sql: string,
     args?: SqliteArguments
   ): PreparedQuery<T> {
@@ -103,7 +103,7 @@ export class ConnectionPoolImpl
     return tx;
   }
 
-  async *stream<T extends SqliteRowObject>(
+  async *stream<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments,
     options?: (StreamOptions & ReserveConnectionOptions) | undefined
@@ -116,7 +116,7 @@ export class ConnectionPoolImpl
     }
   }
 
-  async select<T extends SqliteRowObject>(
+  async select<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments | undefined,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
@@ -129,7 +129,7 @@ export class ConnectionPoolImpl
     }
   }
 
-  async get<T extends SqliteRowObject>(
+  async get<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments | undefined,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
@@ -142,7 +142,7 @@ export class ConnectionPoolImpl
     }
   }
 
-  async getOptional<T extends SqliteRowObject>(
+  async getOptional<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments | undefined,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
@@ -202,7 +202,7 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     }
   }
 
-  prepare<T extends SqliteRowObject>(
+  prepare<T extends SqliteObjectRow>(
     sql: string,
     args?: SqliteArguments,
     options?: QueryOptions
@@ -252,7 +252,7 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     return this.connection.run(query, args);
   }
 
-  stream<T extends SqliteRowObject>(
+  stream<T extends SqliteObjectRow>(
     query: string,
     args: SqliteArguments | undefined,
     options?: StreamOptions | undefined
@@ -260,7 +260,7 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     return this.connection.stream(query, args, options);
   }
 
-  select<T extends SqliteRowObject>(
+  select<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments | undefined,
     options?: QueryOptions | undefined
@@ -268,7 +268,7 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     return this.connection.select(query, args, options);
   }
 
-  get<T extends SqliteRowObject>(
+  get<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments,
     options?: QueryOptions
@@ -276,7 +276,7 @@ export class ReservedConnectionImpl implements ReservedSqliteConnection {
     return this.connection.get(query, args, options);
   }
 
-  getOptional<T extends SqliteRowObject>(
+  getOptional<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments,
     options?: QueryOptions
@@ -295,11 +295,13 @@ export class ConnectionImpl implements SqliteConnection {
 
   private init() {
     this._beginExclusive ??= this.prepare('BEGIN EXCLUSIVE', undefined, {
-      persist: true
+      autoFinalize: true
     });
-    this._begin ??= this.prepare('BEGIN', undefined, { persist: true });
-    this.commit ??= this.prepare('COMMIT', undefined, { persist: true });
-    this.rollback ??= this.prepare('ROLLBACK', undefined, { persist: true });
+    this._begin ??= this.prepare('BEGIN', undefined, { autoFinalize: true });
+    this.commit ??= this.prepare('COMMIT', undefined, { autoFinalize: true });
+    this.rollback ??= this.prepare('ROLLBACK', undefined, {
+      autoFinalize: true
+    });
   }
 
   async begin(options?: TransactionOptions): Promise<SqliteBeginTransaction> {
@@ -362,7 +364,7 @@ export class ConnectionImpl implements SqliteConnection {
     this.rollback?.dispose();
   }
 
-  prepare<T extends SqliteRowObject>(
+  prepare<T extends SqliteObjectRow>(
     sql: string,
     args?: SqliteArguments,
     options?: PrepareOptions
@@ -392,7 +394,7 @@ export class ConnectionImpl implements SqliteConnection {
     return await statement.run();
   }
 
-  async *stream<T extends SqliteRowObject>(
+  async *stream<T extends SqliteObjectRow>(
     query: string | PreparedQuery<T>,
     args: SqliteArguments | undefined,
     options?: StreamOptions | undefined
@@ -416,7 +418,7 @@ export class ConnectionImpl implements SqliteConnection {
     }
   }
 
-  async select<T extends SqliteRowObject>(
+  async select<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
@@ -432,7 +434,7 @@ export class ConnectionImpl implements SqliteConnection {
     return rows as T[];
   }
 
-  async get<T extends SqliteRowObject>(
+  async get<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
@@ -444,7 +446,7 @@ export class ConnectionImpl implements SqliteConnection {
     return row;
   }
 
-  async getOptional<T extends SqliteRowObject>(
+  async getOptional<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
@@ -467,7 +469,7 @@ export class TransactionImpl implements SqliteTransaction {
     await this.con.rollback!.select();
   }
 
-  prepare<T extends SqliteRowObject>(
+  prepare<T extends SqliteObjectRow>(
     sql: string,
     args?: SqliteArguments,
     options?: QueryOptions
@@ -486,7 +488,7 @@ export class TransactionImpl implements SqliteTransaction {
     return this.con.run(query, args);
   }
 
-  stream<T extends SqliteRowObject>(
+  stream<T extends SqliteObjectRow>(
     query: string,
     args: SqliteArguments,
     options?: StreamOptions | undefined
@@ -494,7 +496,7 @@ export class TransactionImpl implements SqliteTransaction {
     return this.con.stream(query, args, options);
   }
 
-  select<T extends SqliteRowObject>(
+  select<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments,
     options?: QueryOptions | undefined
@@ -502,7 +504,7 @@ export class TransactionImpl implements SqliteTransaction {
     return this.con.select(query, args, options);
   }
 
-  get<T extends SqliteRowObject>(
+  get<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments,
     options?: QueryOptions | undefined
@@ -510,7 +512,7 @@ export class TransactionImpl implements SqliteTransaction {
     return this.con.get(query, args, options);
   }
 
-  getOptional<T extends SqliteRowObject>(
+  getOptional<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments,
     options?: QueryOptions | undefined
@@ -556,7 +558,7 @@ class BeginTransactionImpl
     }
   }
 
-  async select<T extends SqliteRowObject>(
+  async select<T extends SqliteObjectRow>(
     query: string,
     args?: SqliteArguments,
     options?: (QueryOptions & ReserveConnectionOptions) | undefined
@@ -590,7 +592,7 @@ class BeginTransactionImpl
   }
 }
 
-class ConnectionPoolPreparedQueryImpl<T extends SqliteRowObject>
+class ConnectionPoolPreparedQueryImpl<T extends SqliteObjectRow>
   implements PreparedQuery<T>
 {
   [Symbol.dispose]: () => void = undefined as any;
@@ -668,7 +670,7 @@ class ConnectionPoolPreparedQueryImpl<T extends SqliteRowObject>
   }
 }
 
-class ConnectionPreparedQueryImpl<T extends SqliteRowObject>
+class ConnectionPreparedQueryImpl<T extends SqliteObjectRow>
   implements PreparedQuery<T>
 {
   [Symbol.dispose]: () => void = undefined as any;

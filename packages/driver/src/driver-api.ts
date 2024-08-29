@@ -54,7 +54,7 @@ export interface SqliteDriverStatement {
     options?: QueryOptions
   ): Promise<SqliteObjectRow[]>;
   allArray(
-    parameters: SqliteParameterBinding,
+    parameters?: SqliteParameterBinding,
     options?: QueryOptions
   ): Promise<SqliteArrayRow[]>;
 

@@ -36,7 +36,7 @@ class BetterSqlitePreparedStatement implements InternalStatement {
   constructor(statement: bsqlite.Statement, options: PrepareOptions) {
     this.statement = statement;
     this.options = options;
-    this.persisted = options.persist ?? false;
+    this.persisted = options.autoFinalize ?? false;
 
     if (typeof Symbol.dispose != 'undefined') {
       this[Symbol.dispose] = () => this.finalize();
