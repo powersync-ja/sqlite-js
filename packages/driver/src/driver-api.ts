@@ -5,14 +5,11 @@ export type SqliteArguments =
   | null
   | undefined;
 
-export type SqliteRowRaw = SqliteValue[];
-export type SqliteRowObject = Record<string, SqliteValue>;
-export type SqliteRow = SqliteRowRaw | SqliteRowObject;
+export type SqliteArrayRow = SqliteValue[];
+export type SqliteObjectRow = Record<string, SqliteValue>;
 
 export interface PrepareOptions {
-  bigint?: boolean;
-  rawResults?: boolean;
-  persist?: boolean;
+  autoFinalize?: boolean;
 }
 
 export interface ResetOptions {
@@ -32,42 +29,56 @@ export interface SqliteDriverConnection {
     options?: { tables?: string[]; batchLimit?: number }
   ): () => void;
 
-  getLastChanges(): Promise<SqliteChanges>;
-
   close(): Promise<void>;
 }
 
 export type SqliteParameterBinding =
-  | (SqliteValue | undefined)[]
+  | SqliteValue[]
   | Record<string, SqliteValue>
   | null
   | undefined;
 
-export interface SqliteStepResult {
-  rows?: SqliteRow[];
-  done?: boolean;
+export interface QueryOptions {
+  requireTransaction?: boolean;
+  bigint?: boolean;
+}
+
+export interface StreamQueryOptions extends QueryOptions {
+  chunkMaxRows?: number;
+  chunkMaxSize?: number;
 }
 
 export interface SqliteDriverStatement {
-  getColumns(): Promise<string[]>;
+  all(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteObjectRow[]>;
+  allArray(
+    parameters: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteArrayRow[]>;
 
-  bind(parameters: SqliteParameterBinding): void;
-  step(n?: number, options?: StepOptions): Promise<SqliteStepResult>;
-  finalize(): void;
-  reset(options?: ResetOptions): void;
+  stream(
+    parameters?: SqliteParameterBinding,
+    options?: StreamQueryOptions
+  ): AsyncIterator<SqliteObjectRow[]>;
+  streamArray(
+    parameters?: SqliteParameterBinding,
+    options?: StreamQueryOptions
+  ): AsyncIterator<SqliteArrayRow[]>;
 
   /**
-   * Similar to step, followed by reset, and returning number of changed rows.
-   *
-   * Avoids the need to use a separate statement to get changes.
+   * Run a query, and return the number of changed rows, and last insert id.
    */
-  run(options?: StepOptions): Promise<SqliteChanges>;
+  run(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteChanges>;
 
+  getColumns(): Promise<string[]>;
+
+  finalize(): void;
   [Symbol.dispose](): void;
-}
-
-export interface StepOptions {
-  requireTransaction?: boolean;
 }
 
 export interface SqliteDriverConnectionPool {

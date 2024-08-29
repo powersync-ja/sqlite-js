@@ -2,16 +2,15 @@ import type * as sqlite from './node-sqlite.js';
 
 import {
   PrepareOptions,
-  ResetOptions,
+  QueryOptions,
+  SqliteArrayRow,
   SqliteChanges,
   SqliteDriverConnection,
   SqliteDriverConnectionPool,
   SqliteDriverStatement,
+  SqliteObjectRow,
   SqliteParameterBinding,
-  SqliteRow,
-  SqliteStepResult,
-  SqliteValue,
-  StepOptions,
+  StreamQueryOptions,
   UpdateListener
 } from '../driver-api.js';
 
@@ -43,11 +42,6 @@ interface InternalStatement extends SqliteDriverStatement {
 
 class NodeSqliteSyncStatement implements InternalStatement {
   public statement: sqlite.StatementSync;
-  private options: PrepareOptions;
-  private bindPositional: SqliteValue[] = [];
-  private bindNamed: Record<string, SqliteValue> = {};
-  private statementDone = false;
-  private iterator: Iterator<unknown> | undefined = undefined;
 
   readonly persisted: boolean;
 
@@ -55,8 +49,7 @@ class NodeSqliteSyncStatement implements InternalStatement {
 
   constructor(statement: sqlite.StatementSync, options: PrepareOptions) {
     this.statement = statement;
-    this.options = options;
-    this.persisted = options.persist ?? false;
+    this.persisted = options.autoFinalize ?? false;
 
     if (typeof Symbol.dispose != 'undefined') {
       this[Symbol.dispose] = () => this.finalize();
@@ -72,120 +65,69 @@ class NodeSqliteSyncStatement implements InternalStatement {
     return [];
   }
 
-  bind(parameters: SqliteParameterBinding): void {
-    if (parameters == null) {
-      return;
-    }
-    if (Array.isArray(parameters)) {
-      let bindArray = this.bindPositional;
-
-      for (let i = 0; i < parameters.length; i++) {
-        if (typeof parameters[i] != 'undefined') {
-          bindArray[i] = parameters[i]!;
-        }
-      }
-    } else {
-      let previous = this.bindNamed;
-      this.bindNamed = { ...previous, ...parameters };
-    }
-  }
-
-  async run(options?: StepOptions): Promise<SqliteChanges> {
+  async run(
+    parameters: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteChanges> {
     try {
       if (options?.requireTransaction) {
         // TODO: Implement
       }
 
       const statement = this.statement;
-      this.reset();
-
-      try {
-        const bindNamed = this.bindNamed;
-        const bindPositional = this.bindPositional;
-
-        statement.setReadBigInts(true);
-        const r = statement.run(bindNamed, ...bindPositional);
-        return {
-          changes: Number(r.changes),
-          lastInsertRowId: r.lastInsertRowid as bigint
-        };
-      } finally {
-        this.reset();
-      }
+      statement.setReadBigInts(true);
+      const r = statement.run(...convertParameters(parameters));
+      return {
+        changes: Number(r.changes),
+        lastInsertRowId: r.lastInsertRowid as bigint
+      };
     } catch (e) {
       throw mapError(e);
     }
   }
 
-  async step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
+  async all(
+    parameters: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteObjectRow[]> {
     try {
-      const all = n == null;
+      if (options?.requireTransaction) {
+        // TODO: Implement
+      }
 
       const statement = this.statement;
-      if (this.statementDone) {
-        return { done: true };
-      }
-
-      if (options?.requireTransaction) {
-        // TODO: implement
-      }
-
-      const bindNamed = this.bindNamed;
-      const bindPositional = this.bindPositional;
-
-      let iterator = this.iterator;
-      const num_rows = n ?? 1;
-      if (iterator == null) {
-        if (this.options.rawResults) {
-          // Not supported
-        }
-        if (this.options.bigint) {
-          statement.setReadBigInts(true);
-        }
-        iterator = statement
-          .all(bindNamed, ...bindPositional)
-          [Symbol.iterator]();
-        this.iterator = iterator;
-      }
-      let rows: SqliteRow[] = [];
-      let isDone = false;
-      for (let i = 0; i < num_rows || all; i++) {
-        const { value, done } = iterator.next();
-        if (done) {
-          isDone = true;
-          break;
-        }
-        rows.push(value as SqliteRow);
-      }
-      if (isDone) {
-        this.statementDone = true;
-      }
-      return { rows, done: isDone };
+      statement.setReadBigInts(options?.bigint ?? false);
+      const rows = statement.all(...convertParameters(parameters));
+      return rows;
     } catch (e) {
       throw mapError(e);
     }
+  }
+
+  allArray(
+    parameters: SqliteParameterBinding,
+    options: QueryOptions
+  ): Promise<SqliteArrayRow[]> {
+    throw new Error('array rows are not supported');
+  }
+
+  async *stream(
+    parameters: SqliteParameterBinding,
+    options: StreamQueryOptions
+  ): AsyncIterator<SqliteObjectRow[]> {
+    const rows = await this.all(parameters, options);
+    yield rows;
+  }
+
+  streamArray(
+    parameters: SqliteParameterBinding,
+    options: StreamQueryOptions
+  ): AsyncIterator<SqliteArrayRow[]> {
+    throw new Error('array rows are not supported');
   }
 
   finalize(): void {
-    const existingIter = this.iterator;
-    if (existingIter != null) {
-      existingIter.return?.();
-    }
-    this.iterator = undefined;
-    this.statementDone = false;
-  }
-
-  reset(options?: ResetOptions): void {
-    if (this.iterator) {
-      const iter = this.iterator;
-      iter.return?.();
-      this.iterator = undefined;
-    }
-    if (options?.clearBindings) {
-      this.bindNamed = {};
-      this.bindPositional = [];
-    }
-    this.statementDone = false;
+    // We don't use any iterators internally - nothing to cancel here
   }
 }
 
@@ -241,5 +183,13 @@ export class NodeSqliteConnection implements SqliteDriverConnection {
       | undefined
   ): () => void {
     throw new Error('not supported yet');
+  }
+}
+
+function convertParameters(parameters: SqliteParameterBinding): any[] {
+  if (Array.isArray(parameters)) {
+    return parameters;
+  } else {
+    return [parameters];
   }
 }
