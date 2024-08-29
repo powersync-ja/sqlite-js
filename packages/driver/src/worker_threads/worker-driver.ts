@@ -1,13 +1,14 @@
 import * as worker_threads from 'worker_threads';
 import {
   PrepareOptions,
-  ResetOptions,
+  QueryOptions,
+  SqliteArrayRow,
+  SqliteChanges,
   SqliteDriverConnection,
   SqliteDriverStatement,
+  SqliteObjectRow,
   SqliteParameterBinding,
-  SqliteChanges,
-  SqliteStepResult,
-  StepOptions,
+  StreamQueryOptions,
   UpdateListener
 } from '../driver-api.js';
 
@@ -78,25 +79,11 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
       cmd: {
         type: SqliteCommandType.prepare,
         id,
-        bigint: options?.bigint,
-        persist: options?.persist,
-        rawResults: options?.rawResults,
+        autoFinalize: options?.autoFinalize,
         sql
       }
     });
     return new WorkerDriverStatement(this, id);
-  }
-
-  async getLastChanges(): Promise<SqliteChanges> {
-    return await this._push({
-      type: SqliteCommandType.changes
-    });
-  }
-
-  async sync(): Promise<void> {
-    await this._push({
-      type: SqliteCommandType.sync
-    });
   }
 
   _push<T extends SqliteCommand>(cmd: T): Promise<InferCommandResult<T>> {
@@ -206,6 +193,48 @@ class WorkerDriverStatement implements SqliteDriverStatement {
       this[Symbol.dispose] = () => this.finalize();
     }
   }
+  all(
+    parameters: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteObjectRow[]> {
+    return this.driver
+      ._push({
+        type: SqliteCommandType.query,
+        id: this.id,
+        parameters: parameters,
+        options: options
+      })
+      .then((r) => r.rows as SqliteObjectRow[]);
+  }
+
+  allArray(
+    parameters: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteArrayRow[]> {
+    return this.driver
+      ._push({
+        type: SqliteCommandType.query,
+        id: this.id,
+        parameters: parameters,
+        options: options,
+        array: true
+      })
+      .then((r) => r.rows as SqliteArrayRow[]);
+  }
+
+  stream(
+    parameters: SqliteParameterBinding,
+    options?: StreamQueryOptions
+  ): AsyncIterableIterator<SqliteObjectRow[]> {
+    throw new Error('Method not implemented.');
+  }
+
+  streamArray(
+    parameters: SqliteParameterBinding,
+    options?: StreamQueryOptions
+  ): AsyncIterableIterator<SqliteArrayRow[]> {
+    throw new Error('Method not implemented.');
+  }
 
   async getColumns(): Promise<string[]> {
     return this.driver
@@ -216,28 +245,15 @@ class WorkerDriverStatement implements SqliteDriverStatement {
       .then((r) => r.columns);
   }
 
-  bind(parameters: SqliteParameterBinding): void {
-    this.driver._send({
-      type: SqliteCommandType.bind,
-      id: this.id,
-      parameters: parameters
-    });
-  }
-
-  async step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
-    return this.driver._push({
-      type: SqliteCommandType.step,
-      id: this.id,
-      n: n,
-      requireTransaction: options?.requireTransaction
-    });
-  }
-
-  async run(options?: StepOptions): Promise<SqliteChanges> {
+  async run(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteChanges> {
     return this.driver._push({
       type: SqliteCommandType.run,
       id: this.id,
-      requireTransaction: options?.requireTransaction
+      parameters: parameters,
+      options: options
     });
   }
 
@@ -245,14 +261,6 @@ class WorkerDriverStatement implements SqliteDriverStatement {
     this.driver._send({
       type: SqliteCommandType.finalize,
       id: this.id
-    });
-  }
-
-  reset(options?: ResetOptions): void {
-    this.driver._send({
-      type: SqliteCommandType.reset,
-      id: this.id,
-      clearBindings: options?.clearBindings
     });
   }
 }

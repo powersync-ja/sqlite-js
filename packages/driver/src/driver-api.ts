@@ -5,18 +5,11 @@ export type SqliteArguments =
   | null
   | undefined;
 
-export type SqliteRowRaw = SqliteValue[];
-export type SqliteRowObject = Record<string, SqliteValue>;
-export type SqliteRow = SqliteRowRaw | SqliteRowObject;
+export type SqliteArrayRow = SqliteValue[];
+export type SqliteObjectRow = Record<string, SqliteValue>;
 
 export interface PrepareOptions {
-  bigint?: boolean;
-  rawResults?: boolean;
-  persist?: boolean;
-}
-
-export interface ResetOptions {
-  clearBindings?: boolean;
+  autoFinalize?: boolean;
 }
 
 export interface SqliteDriverConnection {
@@ -32,42 +25,83 @@ export interface SqliteDriverConnection {
     options?: { tables?: string[]; batchLimit?: number }
   ): () => void;
 
-  getLastChanges(): Promise<SqliteChanges>;
-
   close(): Promise<void>;
 }
 
 export type SqliteParameterBinding =
-  | (SqliteValue | undefined)[]
+  | SqliteValue[]
   | Record<string, SqliteValue>
   | null
   | undefined;
 
-export interface SqliteStepResult {
-  rows?: SqliteRow[];
-  done?: boolean;
+export interface QueryOptions {
+  requireTransaction?: boolean;
+  bigint?: boolean;
+}
+
+export interface StreamQueryOptions extends QueryOptions {
+  chunkMaxRows?: number;
+  chunkMaxSize?: number;
 }
 
 export interface SqliteDriverStatement {
-  getColumns(): Promise<string[]>;
-
-  bind(parameters: SqliteParameterBinding): void;
-  step(n?: number, options?: StepOptions): Promise<SqliteStepResult>;
-  finalize(): void;
-  reset(options?: ResetOptions): void;
+  /**
+   * Run a query, and return results as an array of row objects.
+   *
+   * If the query does not return results, an empty array is returned.
+   */
+  all(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteObjectRow[]>;
 
   /**
-   * Similar to step, followed by reset, and returning number of changed rows.
+   * Run a query, and return results as an array of row arrays.
    *
-   * Avoids the need to use a separate statement to get changes.
+   * If the query does not return results, an empty array is returned.
    */
-  run(options?: StepOptions): Promise<SqliteChanges>;
+  allArray(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteArrayRow[]>;
 
+  /**
+   * Run a query, and return as an iterator of array of row object chunks.
+   *
+   * It is an error to call any other query methods on the same statement
+   * before the iterator has returned.
+   */
+  stream(
+    parameters?: SqliteParameterBinding,
+    options?: StreamQueryOptions
+  ): AsyncIterableIterator<SqliteObjectRow[]>;
+
+  /**
+   * Run a query, and return as an iterator of array of row array chunks.
+   *
+   * It is an error to call any other query methods on the same statement
+   * before the iterator has returned.
+   */
+  streamArray(
+    parameters?: SqliteParameterBinding,
+    options?: StreamQueryOptions
+  ): AsyncIterableIterator<SqliteArrayRow[]>;
+
+  /**
+   * Run a query, and return the number of changed rows, and last insert id.
+   */
+  run(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteChanges>;
+
+  /**
+   * Get the column names of the data returned by the query.
+   */
+  getColumns(): Promise<string[]>;
+
+  finalize(): void;
   [Symbol.dispose](): void;
-}
-
-export interface StepOptions {
-  requireTransaction?: boolean;
 }
 
 export interface SqliteDriverConnectionPool {
@@ -75,7 +109,6 @@ export interface SqliteDriverConnectionPool {
    * Reserve a connection for exclusive use.
    *
    * If there is no available connection, this will wait until one is available.
-   * @param options
    */
   reserveConnection(
     options?: ReserveConnectionOptions

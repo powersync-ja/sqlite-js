@@ -1,13 +1,14 @@
 import {
   PrepareOptions,
-  ResetOptions,
+  QueryOptions,
+  SqliteArrayRow,
   SqliteChanges,
   SqliteDriverConnection,
   SqliteDriverStatement,
+  SqliteObjectRow,
   SqliteParameterBinding,
-  SqliteStepResult,
   SqliteValue,
-  StepOptions,
+  StreamQueryOptions,
   UpdateListener
 } from '@sqlite-js/driver';
 import type * as bsqlite from 'better-sqlite3';
@@ -23,11 +24,6 @@ interface InternalStatement extends SqliteDriverStatement {
 
 class BetterSqlitePreparedStatement implements InternalStatement {
   public statement: bsqlite.Statement;
-  private options: PrepareOptions;
-  private bindPositional: SqliteValue[] = [];
-  private bindNamed: Record<string, SqliteValue> = {};
-  private statementDone = false;
-  private iterator: Iterator<unknown> | undefined = undefined;
 
   readonly persisted: boolean;
 
@@ -35,8 +31,7 @@ class BetterSqlitePreparedStatement implements InternalStatement {
 
   constructor(statement: bsqlite.Statement, options: PrepareOptions) {
     this.statement = statement;
-    this.options = options;
-    this.persisted = options.persist ?? false;
+    this.persisted = options.autoFinalize ?? false;
 
     if (typeof Symbol.dispose != 'undefined') {
       this[Symbol.dispose] = () => this.finalize();
@@ -57,140 +52,138 @@ class BetterSqlitePreparedStatement implements InternalStatement {
     }
   }
 
-  bind(parameters: SqliteParameterBinding): void {
-    if (parameters == null) {
+  private checkTransaction(options: QueryOptions | undefined) {
+    if (options?.requireTransaction) {
+      if (!this.statement.database.inTransaction) {
+        throw new Error('Transaction has been rolled back');
+      }
+    }
+  }
+
+  _all(
+    parameters: SqliteParameterBinding,
+    options: QueryOptions | undefined,
+    array: boolean
+  ): unknown[] {
+    this.checkTransaction(options);
+
+    const statement = this.statement;
+
+    if (statement.reader) {
+      statement.safeIntegers(options?.bigint ?? false);
+      statement.raw(array);
+      const rows = statement.all(sanitizeParameters(parameters));
+      return rows;
+    } else {
+      statement.run(sanitizeParameters(parameters));
+      return [];
+    }
+  }
+
+  async all(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteObjectRow[]> {
+    try {
+      return this._all(parameters, options, false) as SqliteObjectRow[];
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  async allArray(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteArrayRow[]> {
+    try {
+      return this._all(parameters, options, true) as SqliteArrayRow[];
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  *_stream(
+    parameters: SqliteParameterBinding,
+    options: StreamQueryOptions | undefined,
+    array: boolean
+  ) {
+    this.checkTransaction(options);
+
+    const statement = this.statement;
+
+    if (statement.reader) {
+      statement.safeIntegers(options?.bigint ?? false);
+      statement.raw(array);
+    } else {
+      statement.run(sanitizeParameters(parameters));
       return;
     }
-    if (Array.isArray(parameters)) {
-      let bindArray = this.bindPositional;
-
-      for (let i = 0; i < parameters.length; i++) {
-        if (typeof parameters[i] != 'undefined') {
-          bindArray[i] = parameters[i]!;
-        }
+    const iter = statement.iterate(sanitizeParameters(parameters));
+    const maxBuffer = options?.chunkMaxRows ?? 100;
+    let buffer: any[] = [];
+    for (let row of iter) {
+      buffer.push(row as any);
+      if (buffer.length >= maxBuffer) {
+        yield buffer;
+        buffer = [];
       }
-    } else {
-      for (let key in parameters) {
-        const value = parameters[key];
-        let name = key;
-        const prefix = key[0];
-        // better-sqlite doesn't support the explicit prefix - strip it
-        if (prefix == ':' || prefix == '?' || prefix == '$' || prefix == '@') {
-          name = key.substring(1);
-        }
-        this.bindNamed[name] = value;
-      }
+    }
+    if (buffer.length > 0) {
+      yield buffer;
     }
   }
 
-  async step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
+  async *stream(
+    parameters?: SqliteParameterBinding,
+    options?: StreamQueryOptions
+  ): AsyncIterableIterator<SqliteObjectRow[]> {
     try {
-      return this.stepSync(n, options);
+      yield* this._stream(parameters, options, false);
     } catch (e) {
       throw mapError(e);
     }
   }
 
-  async run(options?: StepOptions): Promise<SqliteChanges> {
+  async *streamArray(
+    parameters?: SqliteParameterBinding,
+    options?: StreamQueryOptions
+  ): AsyncIterableIterator<SqliteArrayRow[]> {
     try {
-      return this.runSync(options);
+      yield* this._stream(parameters, options, true);
     } catch (e) {
       throw mapError(e);
     }
   }
 
-  runSync(options?: StepOptions): SqliteChanges {
-    if (options?.requireTransaction) {
-      if (!this.statement.database.inTransaction) {
-        throw new Error('Transaction has been rolled back');
-      }
-    }
-
-    const statement = this.statement;
-    this.reset();
-
+  async run(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteChanges> {
     try {
-      const bindNamed = this.bindNamed;
-      const bindPositional = this.bindPositional;
-      const bind = [bindPositional, bindNamed].filter((b) => b != null);
-
-      statement.safeIntegers(true);
-      const r = statement.run(...bind);
-      return {
-        changes: r.changes,
-        lastInsertRowId: r.lastInsertRowid as bigint
-      };
-    } finally {
-      this.reset();
+      return this._run(parameters, options);
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
-  stepSync(n?: number, options?: StepOptions): SqliteStepResult {
-    const all = n == null;
+  _run(
+    parameters: SqliteParameterBinding,
+    options?: QueryOptions
+  ): SqliteChanges {
+    this.checkTransaction(options);
 
     const statement = this.statement;
-    if (this.statementDone) {
-      return { done: true } as SqliteStepResult;
-    }
 
-    if (options?.requireTransaction) {
-      if (!this.statement.database.inTransaction) {
-        throw new Error('Transaction has been rolled back');
-      }
-    }
-
-    const bindNamed = this.bindNamed;
-    const bindPositional = this.bindPositional;
-    const bind = [bindPositional, bindNamed].filter((b) => b != null);
-    if (!statement.reader) {
-      statement.run(...bind);
-      this.statementDone = true;
-      return { rows: [], done: true } as SqliteStepResult;
-    }
-    let iterator = this.iterator;
-    const num_rows = n ?? 1;
-    if (iterator == null) {
-      statement.raw(this.options.rawResults ?? false);
-      statement.safeIntegers(this.options.bigint ?? false);
-      iterator = statement.iterate(...bind);
-      this.iterator = iterator;
-    }
-    let rows = [];
-    let isDone = false;
-    for (let i = 0; i < num_rows || all; i++) {
-      const { value, done } = iterator.next();
-      if (done) {
-        isDone = true;
-        break;
-      }
-      rows.push(value);
-    }
-    if (isDone) {
-      this.statementDone = true;
-    }
-    return { rows, done: isDone } as SqliteStepResult;
+    statement.safeIntegers(true);
+    const r = statement.run(sanitizeParameters(parameters));
+    return {
+      changes: r.changes,
+      lastInsertRowId: r.lastInsertRowid as bigint
+    };
   }
 
   finalize(): void {
-    const existingIter = this.iterator;
-    if (existingIter != null) {
-      existingIter.return?.();
-    }
-    this.iterator = undefined;
-    this.statementDone = false;
-  }
-
-  reset(options?: ResetOptions): void {
-    if (this.iterator) {
-      const iter = this.iterator;
-      iter.return!();
-      this.iterator = undefined;
-    }
-    if (options?.clearBindings) {
-      this.bindNamed = {};
-      this.bindPositional = [];
-    }
-    this.statementDone = false;
+    // TODO: cancel iterators
   }
 }
 
@@ -285,4 +278,26 @@ export class BetterSqliteConnection implements SqliteDriverConnection {
     }
     return () => {};
   }
+}
+
+function sanitizeParameters(
+  parameters: SqliteParameterBinding
+): SqliteParameterBinding {
+  if (parameters == null) {
+    return [];
+  } else if (Array.isArray(parameters)) {
+    return parameters;
+  }
+  let result: Record<string, SqliteValue> = {};
+  for (let key in parameters) {
+    const value = parameters[key];
+    let name = key;
+    const prefix = key[0];
+    // better-sqlite doesn't support the explicit prefix - strip it
+    if (prefix == ':' || prefix == '?' || prefix == '$' || prefix == '@') {
+      name = key.substring(1);
+    }
+    result[name] = value;
+  }
+  return result;
 }
