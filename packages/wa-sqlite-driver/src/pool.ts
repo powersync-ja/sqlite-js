@@ -11,12 +11,14 @@ import { WorkerDriverConnection } from './worker_threads';
 
 export function waSqliteWorkerPool(path: string): SqliteDriverConnectionPool {
   return new LazyConnectionPool(async () => {
-    return new WorkerDriverConnection(
+    const connection = new WorkerDriverConnection(
       new Worker(new URL('./wa-sqlite-worker.js', import.meta.url), {
         type: 'module'
       }),
       { path }
     );
+    await connection.open();
+    return connection;
     // return await WaSqliteConnection.open(path);
   });
 }

@@ -19,7 +19,7 @@ export function setupDriverWorker(config: WorkerDriverConfig) {
 
 export function setupDriverPort(config: WorkerDriverConfig) {
   let db: WorkerDriver | null = null;
-  let opened = new Deferred<void>();
+  let opened: Promise<void> | undefined = undefined;
   const port = {
     postMessage: self.postMessage.bind(self)
   };
@@ -30,47 +30,60 @@ export function setupDriverPort(config: WorkerDriverConfig) {
     console.log('received', message, id, args);
 
     if (message == 'open') {
+      const open = new Deferred<void>();
+      opened = open.promise;
       try {
         const connection = await config.openConnection(
           args as WorkerDriverConnectionOptions
         );
         db = new WorkerConnectionAdapter(connection);
         port.postMessage({ id });
-        opened.resolve();
+        open.resolve();
       } catch (e: any) {
-        opened.reject(e);
+        open.reject(e);
         port.postMessage({ id, value: { error: { message: e.message } } });
       }
     } else if (message == 'close') {
       try {
-        await opened.promise;
+        await opened;
         await db?.close();
         port.postMessage({ id });
       } catch (e: any) {
         port.postMessage({ id, value: { error: { message: e.message } } });
       }
     } else if (message == 'execute') {
-      await opened.promise;
-      const commands = args;
+      try {
+        await opened;
+        const commands = args;
 
-      const results = (await db!.execute(commands)).map((r) => {
-        if (isErrorResponse(r)) {
-          const error = r.error;
-          return {
+        const results = (await db!.execute(commands)).map((r) => {
+          if (isErrorResponse(r)) {
+            const error = r.error;
+            return {
+              error: {
+                code: error.code,
+                message: error.message,
+                stack: error.stack
+              }
+            };
+          } else {
+            return r;
+          }
+        });
+        port.postMessage({
+          id,
+          value: results
+        });
+      } catch (e) {
+        port.postMessage({
+          id,
+          value: args.map((c) => ({
             error: {
-              code: error.code,
-              message: error.message,
-              stack: error.stack
+              message: e.message
             }
-          };
-        } else {
-          return r;
-        }
-      });
-      port.postMessage({
-        id,
-        value: results
-      });
+          }))
+        });
+      }
     } else {
       throw new Error(`Unknown message: ${message}`);
     }

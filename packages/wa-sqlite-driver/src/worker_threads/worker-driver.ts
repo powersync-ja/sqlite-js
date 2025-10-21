@@ -38,11 +38,13 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
   private ready: Promise<void>;
   private closing = false;
   private nextId = 1;
+  private options: WorkerDriverConnectionOptions;
 
   buffer: CommandQueueItem[] = [];
 
   constructor(worker: Worker, options: WorkerDriverConnectionOptions) {
     this.worker = worker;
+    this.options = options;
     worker.addEventListener('error', (err) => {
       console.error('worker error', err.message, err);
     });
@@ -62,8 +64,11 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
         callback(value);
       });
     });
-    this.post('open', options);
     this.worker = worker;
+  }
+
+  open() {
+    return this.post('open', this.options);
   }
 
   prepare(sql: string, options?: PrepareOptions): WorkerDriverStatement {
@@ -125,7 +130,7 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
         error: new SqliteError(error)
       } as any;
     }
-    return p;
+    return result;
   }
 
   async close() {
@@ -153,7 +158,9 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
     for (let i = 0; i < commands.length; i++) {
       const c = commands[i];
       const rr = r[i];
-      if (isErrorResponse(rr)) {
+      if (rr == null) {
+        c.reject?.({ message: 'no result received', code: '' });
+      } else if (isErrorResponse(rr)) {
         c.reject?.(rr.error);
       } else if (c.resolve) {
         c.resolve!(rr.value);
