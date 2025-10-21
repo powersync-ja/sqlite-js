@@ -145,8 +145,8 @@ importers:
   packages/wa-sqlite-driver:
     dependencies:
       '@journeyapps/wa-sqlite':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^1.3.2
+        version: 1.3.2
       '@sqlite-js/driver':
         specifier: workspace:^
         version: link:../driver
@@ -534,8 +534,8 @@ packages:
     resolution: {integrity: sha512-u3UPsIilWKOM3F9CXtrG8LEJmNxwoCQC/XVj4IKYXvvpx7QIi/Kg1LI5uDmDpKlac62NUtX7eLjRh+jVZcLOzw==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
 
-  '@journeyapps/wa-sqlite@0.3.0':
-    resolution: {integrity: sha512-LQMjcMh92myqzq9kpKFJJ+t1zY7owHTq8TvVYG83luCKzaZepNk86jNB/56fb/vCEy1PQBRc/cI7BTt10SfItA==}
+  '@journeyapps/wa-sqlite@1.3.2':
+    resolution: {integrity: sha512-zZ0KF01an940DV2jJHHzeTvGlXZ8il/sWnI6a2hH3eV/LHtb5H0c6TB7WursE3c8BvNLifXre3R0mLM5OyNhgw==}
 
   '@jridgewell/gen-mapping@0.3.5':
     resolution: {integrity: sha512-IzL8ZoEDIBRWEzlCcRhOaCupYyN5gdIK+Q6fbFdPDg6HqX6jpkItn7DFIpW9LQzXG6Df9sA7+OKnq0qlz/GaQg==}
@@ -3015,7 +3015,7 @@ snapshots:
       '@types/yargs': 17.0.33
       chalk: 4.1.2
 
-  '@journeyapps/wa-sqlite@0.3.0': {}
+  '@journeyapps/wa-sqlite@1.3.2': {}
 
   '@jridgewell/gen-mapping@0.3.5':
     dependencies:

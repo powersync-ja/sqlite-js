@@ -16,21 +16,11 @@ import {
 import { LazyConnectionPool } from '@sqlite-js/driver/util';
 import { SqliteError } from '@sqlite-js/driver';
 import * as mutex from 'async-mutex';
+import { WorkerDriverConnection } from './worker_threads';
 
 // Initialize SQLite.
-const module = await SQLiteESMFactory();
-const sqlite3 = SQLite.Factory(module);
-
-export function waSqlitePool(path: string): SqliteDriverConnectionPool {
-  return new LazyConnectionPool(async () => {
-    return await WaSqliteConnection.open(path);
-  });
-}
-
-// // Register a custom file system.
-// const vfs = await IDBBatchAtomicVFS.create('hello', module);
-// // @ts-ignore
-// sqlite3.vfs_register(vfs, true);
+export const module = await SQLiteESMFactory();
+export const sqlite3 = SQLite.Factory(module);
 
 const m = new mutex.Mutex();
 
@@ -39,7 +29,6 @@ class StatementImpl implements SqliteDriverStatement {
   private bindPromise?: Promise<{ error: SqliteError | null }>;
   private columns: string[] = [];
 
-  private stringRef?: number;
   private statementRef?: number;
   private done = false;
 
@@ -55,17 +44,21 @@ class StatementImpl implements SqliteDriverStatement {
     return await m.runExclusive(() => this._prepare());
   }
 
+  private async getStatement() {
+    const statementsIter = sqlite3.statements(this.db, this.source, {
+      unscoped: true
+    });
+    for await (let statement of statementsIter) {
+      return statement;
+    }
+    throw new Error(`No SQL statements in: ${this.source}`);
+  }
+
   async _prepare() {
     try {
-      this.stringRef = sqlite3.str_new(this.db, this.source);
-      const strValue = sqlite3.str_value(this.stringRef);
-      const r = await sqlite3.prepare_v2(this.db, strValue);
-      if (r == null) {
-        throw new Error('could not prepare');
-      }
-
-      this.statementRef = r?.stmt;
-      this.columns = sqlite3.column_names(this.statementRef!);
+      const statement = await this.getStatement();
+      this.statementRef = statement;
+      this.columns = sqlite3.column_names(statement);
       return { error: null };
     } catch (e: any) {
       return {
@@ -206,10 +199,6 @@ class StatementImpl implements SqliteDriverStatement {
     if (this.statementRef) {
       sqlite3.finalize(this.statementRef);
       this.statementRef = undefined;
-    }
-    if (this.stringRef) {
-      sqlite3.str_finish(this.stringRef);
-      this.stringRef = undefined;
     }
   }
 

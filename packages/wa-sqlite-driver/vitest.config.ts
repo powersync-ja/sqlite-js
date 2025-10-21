@@ -15,6 +15,7 @@ export default defineConfig({
     'process.env.VITEST': JSON.stringify('true')
   },
   test: {
+    maxConcurrency: 1,
     // environment: 'node',
     // include: ['test/src/**/*.test.ts'],
     browser: {
