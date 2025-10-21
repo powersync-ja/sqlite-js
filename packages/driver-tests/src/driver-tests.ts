@@ -21,10 +21,16 @@ export function describeDriverTests(
     };
 
     beforeEach((context) => {
-      const testNameSanitized = context.fullName.replaceAll(
+      let testNameSanitized = context.fullName.replaceAll(
         /[\s\/\\>\.\-\:]+/g,
         '_'
       );
+
+      if (testNameSanitized.length > 10) {
+        testNameSanitized =
+          testNameSanitized.substring(testNameSanitized.length - 7) +
+          String(Math.random()).substring(1, 4);
+      }
       dbPath = `test-db/${testNameSanitized}.db`;
     });
 

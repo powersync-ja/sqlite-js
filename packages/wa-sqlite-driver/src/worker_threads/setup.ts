@@ -41,7 +41,10 @@ export function setupDriverPort(config: WorkerDriverConfig) {
         open.resolve();
       } catch (e: any) {
         open.reject(e);
-        port.postMessage({ id, value: { error: { message: e.message } } });
+        port.postMessage({
+          id,
+          value: { error: { message: e.message, code: e.code } }
+        });
       }
     } else if (message == 'close') {
       try {
