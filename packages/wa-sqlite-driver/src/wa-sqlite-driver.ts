@@ -1,22 +1,19 @@
-import SQLiteESMFactory from '@journeyapps/wa-sqlite/dist/wa-sqlite-async.mjs';
 import * as SQLite from '@journeyapps/wa-sqlite';
+import SQLiteESMFactory from '@journeyapps/wa-sqlite/dist/wa-sqlite-async.mjs';
 import {
   PrepareOptions,
   ResetOptions,
   SqliteChanges,
   SqliteDriverConnection,
-  SqliteDriverConnectionPool,
   SqliteDriverStatement,
+  SqliteError,
   SqliteParameterBinding,
   SqliteRow,
   SqliteStepResult,
   StepOptions,
   UpdateListener
 } from '@sqlite-js/driver';
-import { LazyConnectionPool } from '@sqlite-js/driver/util';
-import { SqliteError } from '@sqlite-js/driver';
 import * as mutex from 'async-mutex';
-import { WorkerDriverConnection } from './worker_threads';
 
 // Initialize SQLite.
 export const module = await SQLiteESMFactory();

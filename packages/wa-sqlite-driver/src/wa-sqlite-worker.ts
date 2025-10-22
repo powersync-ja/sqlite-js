@@ -1,13 +1,9 @@
+import { OPFSCoopSyncVFS2 } from './OPFSCoopSyncVFS2';
 import { sqlite3, module, WaSqliteConnection } from './wa-sqlite-driver';
 import { setupDriverWorker } from './worker_threads';
-import { IDBBatchAtomicVFS } from '@journeyapps/wa-sqlite/src/examples/IDBBatchAtomicVFS.js';
-import { OPFSCoopSyncVFS } from '@journeyapps/wa-sqlite/src/examples/OPFSCoopSyncVFS.js';
 
 // Register a custom file system.
-// @ts-ignore
-const vfs = await OPFSCoopSyncVFS.create('test.db', module, {
-  lockPolicy: 'exclusive'
-});
+const vfs = await OPFSCoopSyncVFS2.create('test.db', module);
 // @ts-ignore
 sqlite3.vfs_register(vfs as any, true);
 
