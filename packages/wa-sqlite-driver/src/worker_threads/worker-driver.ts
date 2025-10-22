@@ -51,7 +51,6 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
     this.ready = new Promise<void>((resolve) => {
       worker.addEventListener('message', (event) => {
         const { id, value } = event.data;
-        console.log('gotta message', id, value);
         if (id == 0) {
           resolve();
           return;
@@ -121,7 +120,6 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
     const p = new Promise<T>((resolve) => {
       id = this.registerCallback(resolve);
     });
-    console.log('posting', command, id, args);
     this.worker.postMessage([command, id!, args]);
     const result = await p;
     const error = (result as any)?.error;

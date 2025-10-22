@@ -52,19 +52,24 @@ class PersistentFile {
   }
 }
 
+interface WithModule {
+  _module: { retryOps: Promise<void>[] };
+}
+
 export class OPFSCoopSyncVFS2 extends FacadeVFS {
   mapIdToFile = new Map<number, File>();
 
   lastError = null;
-  log = null; //function(...args) { console.log(`[${contextName}]`, ...args) };
+  // log = null; //function(...args) { console.log(`[${contextName}]`, ...args) };
+  log = function (...args) {
+    console.log(`[OPFSCoopSyncVFS2]`, ...args);
+  };
 
   persistentFiles = new Map<string, PersistentFile>();
   boundAccessHandles = new Map<string, FileSystemSyncAccessHandle>();
   unboundAccessHandles = new Set<FileSystemSyncAccessHandle>();
   accessiblePaths = new Set<string>();
   releaser: null | (() => void) = null;
-
-  _module: { retryOps: Promise<void>[] };
 
   static async create(name, module) {
     const vfs = new OPFSCoopSyncVFS2(name, module);
@@ -77,6 +82,10 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
 
   constructor(name, module) {
     super(name, module);
+  }
+
+  get #module() {
+    return (this as unknown as WithModule)._module;
   }
 
   async #initialize(nTemporaryFiles) {
@@ -148,7 +157,7 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
           // files are ready to be used.
           this.log?.(`creating persistent file for ${path}`);
           const create = !!(flags & VFS.SQLITE_OPEN_CREATE);
-          this._module.retryOps.push(
+          this.#module.retryOps.push(
             (async () => {
               try {
                 // Get the path directory handle.
@@ -192,7 +201,7 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
         } else if (!persistentFile.accessHandle) {
           // This branch is reached if the database was previously opened
           // and closed.
-          this._module.retryOps.push(
+          this.#module.retryOps.push(
             (async () => {
               const file = new File(path, flags);
               file.persistentFile = this.persistentFiles.get(path);
@@ -499,7 +508,7 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
     console.assert(!file.persistentFile.handleLockReleaser);
     if (!file.persistentFile.isRequestInProgress) {
       file.persistentFile.isRequestInProgress = true;
-      this._module.retryOps.push(
+      this.#module.retryOps.push(
         (async () => {
           // Acquire the Web Lock.
           file.persistentFile.handleLockReleaser = await this.#acquireLock(
@@ -523,7 +532,7 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
           file.persistentFile.isRequestInProgress = false;
         })()
       );
-      return this._module.retryOps.at(-1);
+      return this.#module.retryOps.at(-1);
     }
     return Promise.resolve();
   }

@@ -11,7 +11,7 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.9",
     "@types/mocha": "^10.0.6",
-    "@types/node": "^20.14.2",
+    "@types/node": "^24.9.1",
     "expect": "^29.7.0",
     "mocha": "^10.4.0",
     "prettier": "^3.2.5",
