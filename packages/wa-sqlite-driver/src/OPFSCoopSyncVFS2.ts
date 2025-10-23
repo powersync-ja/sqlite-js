@@ -142,7 +142,9 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
     // Populate temporary directory.
     for (let i = 0; i < nTemporaryFiles; i++) {
       const tmpFile = await tmpDir.getFileHandle(`${i}.tmp`, { create: true });
-      const tmpAccessHandle = await (tmpFile as any).createSyncAccessHandle();
+      const tmpAccessHandle = await (tmpFile as any).createSyncAccessHandle({
+        mode: 'readwrite-unsafe'
+      });
       this.unboundAccessHandles.add(tmpAccessHandle);
     }
   }
@@ -541,7 +543,7 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
               if (subPersistentFile) {
                 subPersistentFile.accessHandle = await (
                   subPersistentFile.fileHandle as any
-                ).createSyncAccessHandle();
+                ).createSyncAccessHandle({ mode: 'readwrite-unsafe' });
               }
             })
           );
@@ -582,7 +584,7 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
       setTimeout(notify);
 
       this.log?.(`lock requested: ${lockName}`);
-      navigator.locks.request(lockName, (lock) => {
+      navigator.locks.request(lockName, { mode: 'shared' }, (lock) => {
         // We have the lock. Stop asking other connections for it.
         this.log?.(`lock acquired: ${lockName}`, lock);
         clearInterval(notifyId);
