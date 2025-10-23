@@ -34,6 +34,7 @@ interface FileSystemSyncAccessHandle extends FileSystemHandle {
 }
 
 class PersistentFile {
+  path: string;
   fileHandle: FileSystemFileHandle;
   accessHandle: null | FileSystemSyncAccessHandle = null;
 
@@ -47,7 +48,8 @@ class PersistentFile {
   handleRequestChannel: BroadcastChannel;
   isHandleRequested = false;
 
-  constructor(fileHandle) {
+  constructor(path: string, fileHandle: FileSystemFileHandle) {
+    this.path = path;
     this.fileHandle = fileHandle;
   }
 }
@@ -86,6 +88,20 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
 
   get #module() {
     return (this as unknown as WithModule)._module;
+  }
+
+  async prelock(fileName: string): Promise<Disposable> {
+    const file = this.persistentFiles.get('/' + fileName);
+    this.log?.('prelock', fileName, file);
+    await this.#requestAccessHandle(file);
+    this.log?.('prelocked', fileName);
+    const self = this;
+    return {
+      [Symbol.dispose]() {
+        this.log?.('prelock release', fileName);
+        self.#releaseAccessHandle(file);
+      }
+    };
   }
 
   async #initialize(nTemporaryFiles) {
@@ -183,11 +199,11 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
                 // Get access handles for the files.
                 const file = new File(path, flags);
                 file.persistentFile = this.persistentFiles.get(path);
-                await this.#requestAccessHandle(file);
+                await this.#requestAccessHandle(file.persistentFile);
               } catch (e) {
                 // Use an invalid persistent file to signal this error
                 // for the retried open.
-                const persistentFile = new PersistentFile(null);
+                const persistentFile = new PersistentFile(path, null);
                 this.persistentFiles.set(path, persistentFile);
                 console.error(e);
               }
@@ -205,7 +221,7 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
             (async () => {
               const file = new File(path, flags);
               file.persistentFile = this.persistentFiles.get(path);
-              await this.#requestAccessHandle(file);
+              await this.#requestAccessHandle(file.persistentFile);
             })()
           );
           return VFS.SQLITE_BUSY;
@@ -282,7 +298,7 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
 
       if (file?.flags & VFS.SQLITE_OPEN_MAIN_DB) {
         if (file.persistentFile?.handleLockReleaser) {
-          this.#releaseAccessHandle(file);
+          this.#releaseAccessHandle(file.persistentFile);
         }
       } else if (file?.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
         file.accessHandle.truncate(0);
@@ -315,7 +331,7 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
         file.flags & VFS.SQLITE_OPEN_MAIN_DB &&
         !file.persistentFile.isFileLocked
       ) {
-        this.#releaseAccessHandle(file);
+        this.#releaseAccessHandle(file.persistentFile);
       }
 
       if (bytesRead < pData.byteLength) {
@@ -408,12 +424,12 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
           file.persistentFile.isHandleRequested = true;
         } else {
           // Release the access handles immediately.
-          this.#releaseAccessHandle(file);
+          this.#releaseAccessHandle(file.persistentFile);
         }
         file.persistentFile.handleRequestChannel.onmessage = null;
       };
 
-      this.#requestAccessHandle(file);
+      this.#requestAccessHandle(file.persistentFile);
       this.log?.('returning SQLITE_BUSY');
       file.persistentFile.isLockBusy = true;
       return VFS.SQLITE_BUSY;
@@ -430,7 +446,7 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
       if (!file.persistentFile.isLockBusy) {
         if (file.persistentFile.isHandleRequested) {
           // Another connection wants the access handle.
-          this.#releaseAccessHandle(file);
+          this.#releaseAccessHandle(file.persistentFile);
           file.persistentFile.isHandleRequested = false;
         }
         file.persistentFile.isFileLocked = false;
@@ -490,10 +506,10 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
   async #createPersistentFile(
     fileHandle: FileSystemFileHandle
   ): Promise<PersistentFile> {
-    const persistentFile = new PersistentFile(fileHandle);
     const root = await navigator.storage.getDirectory();
     const relativePath = await root.resolve(fileHandle);
     const path = `/${relativePath.join('/')}`;
+    const persistentFile = new PersistentFile(path, fileHandle);
     persistentFile.handleRequestChannel = new BroadcastChannel(`ahp:${path}`);
     this.persistentFiles.set(path, persistentFile);
 
@@ -504,32 +520,32 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
     return persistentFile;
   }
 
-  #requestAccessHandle(file: File): Promise<void> {
-    console.assert(!file.persistentFile.handleLockReleaser);
-    if (!file.persistentFile.isRequestInProgress) {
-      file.persistentFile.isRequestInProgress = true;
+  #requestAccessHandle(persistentFile: PersistentFile): Promise<void> {
+    console.assert(!persistentFile.handleLockReleaser);
+    if (!persistentFile.isRequestInProgress) {
+      persistentFile.isRequestInProgress = true;
+      this.log?.('Requesting lock for', persistentFile.path);
       this.#module.retryOps.push(
         (async () => {
           // Acquire the Web Lock.
-          file.persistentFile.handleLockReleaser = await this.#acquireLock(
-            file.persistentFile
-          );
+          persistentFile.handleLockReleaser =
+            await this.#acquireLock(persistentFile);
 
           // Get access handles for the database and releated files in parallel.
-          this.log?.(`creating access handles for ${file.path}`);
+          this.log?.(`creating access handles for ${persistentFile.path}`);
           await Promise.all(
             DB_RELATED_FILE_SUFFIXES.map(async (suffix) => {
-              const persistentFile = this.persistentFiles.get(
-                file.path + suffix
+              const subPersistentFile = this.persistentFiles.get(
+                persistentFile.path + suffix
               );
-              if (persistentFile) {
-                persistentFile.accessHandle = await (
-                  persistentFile.fileHandle as any
+              if (subPersistentFile) {
+                subPersistentFile.accessHandle = await (
+                  subPersistentFile.fileHandle as any
                 ).createSyncAccessHandle();
               }
             })
           );
-          file.persistentFile.isRequestInProgress = false;
+          persistentFile.isRequestInProgress = false;
         })()
       );
       return this.#module.retryOps.at(-1);
@@ -537,19 +553,21 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
     return Promise.resolve();
   }
 
-  async #releaseAccessHandle(file: File): Promise<void> {
+  async #releaseAccessHandle(persistentFile: PersistentFile): Promise<void> {
     DB_RELATED_FILE_SUFFIXES.forEach(async (suffix) => {
-      const persistentFile = this.persistentFiles.get(file.path + suffix);
-      if (persistentFile) {
-        persistentFile.accessHandle?.close();
-        persistentFile.accessHandle = null;
+      const subPersistentFile = this.persistentFiles.get(
+        persistentFile.path + suffix
+      );
+      if (subPersistentFile) {
+        subPersistentFile.accessHandle?.close();
+        subPersistentFile.accessHandle = null;
       }
     });
-    this.log?.(`access handles closed for ${file.path}`);
+    this.log?.(`access handles closed for ${persistentFile.path}`);
 
-    file.persistentFile.handleLockReleaser?.();
-    file.persistentFile.handleLockReleaser = null;
-    this.log?.(`lock released for ${file.path}`);
+    persistentFile.handleLockReleaser?.();
+    persistentFile.handleLockReleaser = null;
+    this.log?.(`lock released for ${persistentFile.path}`);
   }
 
   #acquireLock(persistentFile: PersistentFile): Promise<() => void> {

@@ -14,6 +14,7 @@ import {
   UpdateListener
 } from '@sqlite-js/driver';
 import * as mutex from 'async-mutex';
+import { OPFSCoopSyncVFS2 } from './OPFSCoopSyncVFS2';
 
 // Initialize SQLite.
 export const module = await SQLiteESMFactory();
@@ -31,6 +32,7 @@ class StatementImpl implements SqliteDriverStatement {
 
   constructor(
     private db: number,
+    private con: WaSqliteConnection,
     public source: string,
     public options: PrepareOptions
   ) {
@@ -251,17 +253,36 @@ class StatementImpl implements SqliteDriverStatement {
 
 export class WaSqliteConnection implements SqliteDriverConnection {
   db: number;
+  vfs: OPFSCoopSyncVFS2;
 
   statements = new Set<StatementImpl>();
+  lockDisposer: Disposable | null = null;
 
-  static async open(filename: string): Promise<WaSqliteConnection> {
+  static async open(
+    filename: string,
+    vfs: OPFSCoopSyncVFS2
+  ): Promise<WaSqliteConnection> {
     // Open the database.
     const db = await sqlite3.open_v2(filename);
-    return new WaSqliteConnection(db);
+    return new WaSqliteConnection(db, vfs, filename);
   }
 
-  constructor(db: number) {
+  constructor(
+    db: number,
+    vfs: OPFSCoopSyncVFS2,
+    public path: string
+  ) {
     this.db = db;
+    this.vfs = vfs;
+  }
+
+  async lock() {
+    this.lockDisposer = await this.vfs.prelock(this.path);
+  }
+
+  release() {
+    this.lockDisposer[Symbol.dispose]();
+    this.lockDisposer = null;
   }
 
   async close() {
@@ -285,7 +306,7 @@ export class WaSqliteConnection implements SqliteDriverConnection {
   }
 
   prepare(sql: string, options?: PrepareOptions): StatementImpl {
-    const st = new StatementImpl(this.db, sql, options ?? {});
+    const st = new StatementImpl(this.db, this, sql, options ?? {});
     // TODO: cleanup on finalize
     this.statements.add(st);
     return st;

@@ -35,6 +35,9 @@ export interface SqliteDriverConnection {
   getLastChanges(): Promise<SqliteChanges>;
 
   close(): Promise<void>;
+
+  lock?(mode: 'exclusive' | 'shared' | 'deferred'): Promise<void>;
+  release?(): void;
 }
 
 export type SqliteParameterBinding =

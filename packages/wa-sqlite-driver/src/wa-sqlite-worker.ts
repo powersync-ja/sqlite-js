@@ -9,6 +9,6 @@ sqlite3.vfs_register(vfs as any, true);
 
 setupDriverWorker({
   async openConnection(options) {
-    return await WaSqliteConnection.open(options.path);
+    return await WaSqliteConnection.open(options.path, vfs);
   }
 });

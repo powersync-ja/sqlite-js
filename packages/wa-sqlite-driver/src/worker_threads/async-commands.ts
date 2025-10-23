@@ -14,7 +14,9 @@ export enum SqliteCommandType {
   sync = 6,
   parse = 7,
   run = 8,
-  changes = 9
+  changes = 9,
+  lock = 10,
+  release = 11
 }
 
 export type SqliteDriverError = SerializedDriverError;
@@ -89,6 +91,15 @@ export interface SqliteGetChanges {
   type: SqliteCommandType.changes;
 }
 
+export interface SqliteLock {
+  type: SqliteCommandType.lock;
+  mode: 'exclusive' | 'shared' | 'deferred';
+}
+
+export interface SqliteRelease {
+  type: SqliteCommandType.release;
+}
+
 export type SqliteCommand =
   | SqlitePrepare
   | SqliteBind
@@ -98,7 +109,9 @@ export type SqliteCommand =
   | SqliteFinalize
   | SqliteSync
   | SqliteParse
-  | SqliteGetChanges;
+  | SqliteGetChanges
+  | SqliteLock
+  | SqliteRelease;
 
 export type InferCommandResult<T extends SqliteCommand> = T extends SqliteRun
   ? SqliteChanges

@@ -54,6 +54,13 @@ export function setupDriverPort(config: WorkerDriverConfig) {
       } catch (e: any) {
         port.postMessage({ id, value: { error: { message: e.message } } });
       }
+    } else if (message == 'lock') {
+      try {
+        await opened;
+        port.postMessage({ id });
+      } catch (e: any) {
+        port.postMessage({ id, value: { error: { message: e.message } } });
+      }
     } else if (message == 'execute') {
       try {
         await opened;
