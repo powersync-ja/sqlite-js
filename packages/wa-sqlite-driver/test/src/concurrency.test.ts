@@ -42,7 +42,9 @@ describe('concurrency tests', () => {
     for (let i = 0; i < 5; i++) {
       const p = (async () => {
         const start = Date.now();
-        await using connection = await driver.reserveConnection();
+        await using connection = await driver.reserveConnection({
+          readonly: true
+        });
 
         using b = connection.prepare('begin immediate');
         await b.step();
@@ -59,5 +61,27 @@ describe('concurrency tests', () => {
       promises.push(p);
     }
     await Promise.all(promises);
+
+    for (let i = 0; i < 5; i++) {
+      const p = (async () => {
+        const start = Date.now();
+        await using connection = await driver.reserveConnection({
+          readonly: true
+        });
+
+        using b = connection.prepare('begin immediate');
+        await b.step();
+        using s = connection.prepare('select * from test_data');
+        const { rows } = await s.step();
+
+        expect(rows).toEqual([{ id: 1, data: 'test' }]);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        using e = connection.prepare('commit');
+        await e.step();
+        console.log('tx done in', Date.now() - start);
+      })();
+      promises.push(p);
+    }
   });
 });

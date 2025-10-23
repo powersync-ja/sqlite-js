@@ -1,7 +1,8 @@
 import { SqliteDriverConnectionPool } from '@sqlite-js/driver';
 import {
   LazyConnectionPool,
-  MultiConnectionPool
+  MultiConnectionPool,
+  ReadWriteConnectionPool
 } from '@sqlite-js/driver/util';
 import {
   ReserveConnectionOptions,
@@ -32,21 +33,26 @@ export function waSqliteSingleWorker(path: string): SqliteDriverConnectionPool {
 }
 
 export function waSqliteWorkerPool(path: string): SqliteDriverConnectionPool {
-  return new MultiConnectionPool(
+  return new ReadWriteConnectionPool(
     {
       async openConnection(
         options?: ReserveConnectionOptions & { connectionName?: string }
       ): Promise<SqliteDriverConnection> {
+        console.log('openConnection', options);
         const connection = new WorkerDriverConnection(
           new Worker(new URL('./wa-sqlite-worker.js', import.meta.url), {
             type: 'module'
           }),
-          { path }
+          {
+            path,
+            readonly: options?.readonly ?? false,
+            connectionName: options?.connectionName
+          }
         );
         await connection.open();
         return connection;
       }
     },
-    {}
+    { maxConnections: 5 }
   );
 }

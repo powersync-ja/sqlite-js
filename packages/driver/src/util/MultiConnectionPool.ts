@@ -20,6 +20,7 @@ export class MultiConnectionPool implements SqliteDriverConnectionPool {
   private _availableReadConnections: SqliteDriverConnection[] = [];
   private _queue: QueuedPoolItem[] = [];
   private _maxConnections: number;
+  private _nextConnectionNumber = 1;
 
   private options: ConnectionPoolOptions;
 
@@ -42,7 +43,8 @@ export class MultiConnectionPool implements SqliteDriverConnectionPool {
     const promise = new Promise<ReservedConnection>((resolve, reject) => {
       this._queue.push({
         resolve,
-        reject
+        reject,
+        options: options ?? {}
       });
     });
 
@@ -57,7 +59,7 @@ export class MultiConnectionPool implements SqliteDriverConnectionPool {
     const connection = await this.factory.openConnection({
       ...this.options,
       ...options,
-      connectionName: `connection-${this._allConnections.size + 1}`
+      connectionName: `connection-${this._nextConnectionNumber++}`
     });
     this._allConnections.add(connection);
     return connection;
@@ -82,7 +84,7 @@ export class MultiConnectionPool implements SqliteDriverConnectionPool {
     let connection: SqliteDriverConnection;
     if (this._availableReadConnections.length == 0) {
       // FIXME: prevent opening more than the max
-      connection = await this.expandPool();
+      connection = await this.expandPool(item.options);
     } else {
       connection = this._availableReadConnections.shift()!;
     }

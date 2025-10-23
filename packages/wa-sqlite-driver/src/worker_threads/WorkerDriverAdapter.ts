@@ -26,9 +26,12 @@ export class WorkerConnectionAdapter implements WorkerDriver {
   constructor(public connnection: SqliteDriverConnection) {}
 
   statements = new Map<number, SqliteDriverStatement>();
+  private promise: Promise<void> = Promise.resolve();
 
   async close() {
-    await this.connnection.close();
+    const p = this.promise.then(() => this.connnection.close());
+    this.promise = p;
+    return p;
   }
 
   private requireStatement(id: number) {
@@ -122,6 +125,14 @@ export class WorkerConnectionAdapter implements WorkerDriver {
   }
 
   async execute<const T extends SqliteCommand[]>(
+    commands: T
+  ): Promise<InferBatchResult<T>> {
+    const p = this.promise.then(() => this._execute(commands));
+    this.promise = p.then(() => {});
+    return p;
+  }
+
+  async _execute<const T extends SqliteCommand[]>(
     commands: T
   ): Promise<InferBatchResult<T>> {
     let results: SqliteCommandResponse[] = [];
