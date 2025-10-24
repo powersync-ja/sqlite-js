@@ -62,10 +62,10 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
   mapIdToFile = new Map<number, File>();
 
   lastError = null;
-  // log = null; //function(...args) { console.log(`[${contextName}]`, ...args) };
-  log = function (...args) {
-    console.log(`[OPFSCoopSyncVFS2]`, ...args);
-  };
+  log = null;
+  // log = function (...args) {
+  //   console.log(`[OPFSCoopSyncVFS2]`, ...args);
+  // };
 
   persistentFiles = new Map<string, PersistentFile>();
   boundAccessHandles = new Map<string, FileSystemSyncAccessHandle>();

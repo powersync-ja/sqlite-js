@@ -117,6 +117,10 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
     this._maybeFlush();
   }
 
+  log(...args: any[]) {
+    console.log(this.options.path, this.options.connectionName, ...args);
+  }
+
   private registerCallback(callback: (value: any) => void) {
     const id = this.nextCallbackId++;
     this.callbacks.set(id, callback);

@@ -38,7 +38,6 @@ export function waSqliteWorkerPool(path: string): SqliteDriverConnectionPool {
       async openConnection(
         options?: ReserveConnectionOptions & { connectionName?: string }
       ): Promise<SqliteDriverConnection> {
-        console.log('openConnection', options);
         const connection = new WorkerDriverConnection(
           new Worker(new URL('./wa-sqlite-worker.js', import.meta.url), {
             type: 'module'

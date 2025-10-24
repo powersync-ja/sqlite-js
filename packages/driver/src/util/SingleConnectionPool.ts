@@ -29,7 +29,6 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
   async reserveConnection(
     options?: ReserveConnectionOptions
   ): Promise<ReservedConnection> {
-    console.log('single reserveConnection', this.connection.lock);
     if (options?.signal?.aborted) {
       throw new Error('Aborted');
     }

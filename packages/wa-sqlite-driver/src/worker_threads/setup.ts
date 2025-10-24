@@ -27,8 +27,6 @@ export function setupDriverPort(config: WorkerDriverConfig) {
   const listener = async (value: any) => {
     const [message, id, args] = value.data;
 
-    console.log('received', message, id, args);
-
     if (message == 'open') {
       const open = new Deferred<void>();
       opened = open.promise;

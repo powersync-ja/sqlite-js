@@ -9,7 +9,6 @@ setupDriverWorker({
     if (vfs != null) {
       throw new Error('Can only open one connection');
     }
-    console.log('open', options);
     vfs = await OPFSCoopSyncVFS2.create(
       'test.db',
       module,

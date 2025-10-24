@@ -5,7 +5,6 @@ describeDriverTests(
   'wa-sqlite',
   { getColumns: true, rawResults: true, allowsMissingParameters: false },
   async (path) => {
-    console.log('open', path);
     return waSqliteSingleWorker(path);
   }
 );

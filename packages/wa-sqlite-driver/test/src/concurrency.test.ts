@@ -83,5 +83,6 @@ describe('concurrency tests', () => {
       })();
       promises.push(p);
     }
+    await Promise.all(promises);
   });
 });
