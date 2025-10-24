@@ -23,19 +23,19 @@ PRAGMA page_size=1024;
 VACUUM;
 CREATE TABLE pgsz(taskid, sz INTEGER);
 --task 1
-  INSERT INTO pgsz VALUES(1, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(1, (select page_size from pragma_page_size()));
 --end
 --task 2
-  INSERT INTO pgsz VALUES(2, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(2, (select page_size from pragma_page_size()));
 --end
 --task 3
-  INSERT INTO pgsz VALUES(3, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(3, (select page_size from pragma_page_size()));
 --end
 --task 4
-  INSERT INTO pgsz VALUES(4, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(4, (select page_size from pragma_page_size()));
 --end
 --task 5
-  INSERT INTO pgsz VALUES(5, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(5, (select page_size from pragma_page_size()));
 --end
 --source multiwrite01.test
 --source crash02.subtest
@@ -46,19 +46,19 @@ PRAGMA page_size=2048;
 VACUUM;
 DELETE FROM pgsz;
 --task 1
-  INSERT INTO pgsz VALUES(1, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(1, (select page_size from pragma_page_size()));
 --end
 --task 2
-  INSERT INTO pgsz VALUES(2, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(2, (select page_size from pragma_page_size()));
 --end
 --task 3
-  INSERT INTO pgsz VALUES(3, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(3, (select page_size from pragma_page_size()));
 --end
 --task 4
-  INSERT INTO pgsz VALUES(4, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(4, (select page_size from pragma_page_size()));
 --end
 --task 5
-  INSERT INTO pgsz VALUES(5, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(5, (select page_size from pragma_page_size()));
 --end
 --source multiwrite01.test
 --source crash02.subtest
@@ -69,19 +69,19 @@ PRAGMA page_size=8192;
 VACUUM;
 DELETE FROM pgsz;
 --task 1
-  INSERT INTO pgsz VALUES(1, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(1, (select page_size from pragma_page_size()));
 --end
 --task 2
-  INSERT INTO pgsz VALUES(2, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(2, (select page_size from pragma_page_size()));
 --end
 --task 3
-  INSERT INTO pgsz VALUES(3, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(3, (select page_size from pragma_page_size()));
 --end
 --task 4
-  INSERT INTO pgsz VALUES(4, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(4, (select page_size from pragma_page_size()));
 --end
 --task 5
-  INSERT INTO pgsz VALUES(5, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(5, (select page_size from pragma_page_size()));
 --end
 --source multiwrite01.test
 --source crash02.subtest
@@ -92,19 +92,19 @@ PRAGMA page_size=16384;
 VACUUM;
 DELETE FROM pgsz;
 --task 1
-  INSERT INTO pgsz VALUES(1, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(1, (select page_size from pragma_page_size()));
 --end
 --task 2
-  INSERT INTO pgsz VALUES(2, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(2, (select page_size from pragma_page_size()));
 --end
 --task 3
-  INSERT INTO pgsz VALUES(3, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(3, (select page_size from pragma_page_size()));
 --end
 --task 4
-  INSERT INTO pgsz VALUES(4, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(4, (select page_size from pragma_page_size()));
 --end
 --task 5
-  INSERT INTO pgsz VALUES(5, eval('PRAGMA page_size'));
+  INSERT INTO pgsz VALUES(5, (select page_size from pragma_page_size()));
 --end
 --source multiwrite01.test
 --source crash02.subtest

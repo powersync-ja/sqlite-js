@@ -153,6 +153,9 @@ importers:
       async-mutex:
         specifier: ^0.5.0
         version: 0.5.0
+      wa-sqlite:
+        specifier: ^1.0.0
+        version: 1.0.0
     devDependencies:
       '@sqlite-js/driver-tests':
         specifier: workspace:^
@@ -1204,7 +1207,7 @@ packages:
     engines: {node: '>= 14'}
 
   concat-map@0.0.1:
-    resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
+    resolution: {integrity: sha1-2Klr13/Wjfd5OnMDajug1UBdR3s=}
 
   console-control-strings@1.1.0:
     resolution: {integrity: sha512-ty/fTekppD2fIwRvnZAVdeOiGd1c7YXEixbgJTNzqcxJWKQnjJ/V1bNEEE6hygpM3WjwHFUVK6HTjWSzV4a8sQ==}
@@ -2642,6 +2645,9 @@ packages:
       jsdom:
         optional: true
 
+  wa-sqlite@1.0.0:
+    resolution: {integrity: sha512-Kyybo5/BaJp76z7gDWGk2J6Hthl4NIPsE+swgraEjy3IY6r5zIR02wAs1OJH4XtJp1y3puj3Onp5eMGS0z7nUA==}
+
   wait-port@1.1.0:
     resolution: {integrity: sha512-3e04qkoN3LxTMLakdqeWth8nih8usyg+sf1Bgdf9wwUkp05iuK1eSY/QpLvscT/+F/gA89+LpUmmgBtesbqI2Q==}
     engines: {node: '>=10'}
@@ -2758,7 +2764,7 @@ packages:
     engines: {node: '>=12'}
 
   yauzl@2.10.0:
-    resolution: {integrity: sha512-p4a9I6X6nu6IhoGmBqAcbJy1mlC4j27vEPZX9F4L4/vZT3Lyq1VkFHw/V/PUcB9Buo+DG3iHkT0x3Qya58zc3g==}
+    resolution: {integrity: sha1-x+sXyT4RLLEIb6bY5R+wZnt5pfk=}
 
   yn@3.1.1:
     resolution: {integrity: sha512-Ux4ygGWsu2c7isFWe8Yu1YluJmqVhxqK2cLXNQA5AcC3QfbGNpM7fu0Y8b/z16pXLnFxZYvWhd3fhBY9DLmC6Q==}
@@ -5278,6 +5284,8 @@ snapshots:
       - sugarss
       - supports-color
       - terser
+
+  wa-sqlite@1.0.0: {}
 
   wait-port@1.1.0:
     dependencies:

@@ -17,17 +17,18 @@
   "dependencies": {
     "@journeyapps/wa-sqlite": "^1.3.2",
     "@sqlite-js/driver": "workspace:^",
-    "async-mutex": "^0.5.0"
+    "async-mutex": "^0.5.0",
+    "wa-sqlite": "^1.0.0"
   },
   "devDependencies": {
-    "vite-plugin-top-level-await": "^1.4.2",
-    "vite-plugin-wasm": "^3.3.0",
     "@sqlite-js/driver-tests": "workspace:^",
     "@types/node": "^24.9.1",
-    "typescript": "^5.9.3",
     "@vitest/browser": "^2.0.5",
-    "vitest": "^2.0.5",
     "playwright": "^1.45.3",
+    "typescript": "^5.9.3",
+    "vite-plugin-top-level-await": "^1.4.2",
+    "vite-plugin-wasm": "^3.3.0",
+    "vitest": "^2.0.5",
     "webdriverio": "^8.39.1"
   }
 }

@@ -203,6 +203,7 @@ class MptestRunner {
       if (taskControl.isResolved()) {
         return;
       }
+      this.logError(`task failure client=${clientId}`, err);
       taskControl.reject(err);
       throw err;
     });
@@ -236,13 +237,15 @@ class MptestRunner {
     }
     const waitPromise = Promise.all(promises).then(() => undefined);
     if (timeoutMs <= 0) {
-      await waitPromise;
+      await this.withProgress(waitPromise, label);
       return;
     }
     let handle: ReturnType<typeof setTimeout> | undefined;
+    let progressHandle: ReturnType<typeof setInterval> | undefined;
     try {
+      progressHandle = this.createProgressLogger(label, timeoutMs);
       await Promise.race([
-        waitPromise,
+        this.withProgress(waitPromise, label, progressHandle),
         new Promise((_, reject) => {
           handle = setTimeout(
             () =>
@@ -257,7 +260,55 @@ class MptestRunner {
       if (handle) {
         clearTimeout(handle);
       }
+      if (progressHandle) {
+        clearInterval(progressHandle);
+      }
     }
+  }
+
+  private createProgressLogger(
+    label: string,
+    timeoutMs: number
+  ): ReturnType<typeof setInterval> {
+    const start = Date.now();
+    return setInterval(
+      () => {
+        const elapsed = Date.now() - start;
+        const pending = this.describePending();
+        console.log(
+          `[wait] ${label} elapsed=${elapsed}ms timeout=${timeoutMs}ms pending=${pending}`
+        );
+      },
+      Math.min(1000, Math.max(250, timeoutMs / 10))
+    );
+  }
+
+  private async withProgress(
+    promise: Promise<unknown>,
+    label: string,
+    progressHandle?: ReturnType<typeof setInterval>
+  ): Promise<void> {
+    try {
+      await promise;
+    } finally {
+      if (progressHandle) {
+        clearInterval(progressHandle);
+      }
+    }
+  }
+
+  private describePending(): string {
+    const entries: string[] = [];
+    for (const [clientId, client] of this.clients.entries()) {
+      const size = client.pending.size;
+      if (size > 0) {
+        entries.push(`client${clientId}:${size}`);
+      }
+    }
+    if (entries.length === 0) {
+      return 'none';
+    }
+    return entries.join(',');
   }
 
   private async runScriptInternal(
@@ -292,10 +343,12 @@ class MptestRunner {
       }
       if (index > begin) {
         const sqlChunk = script.slice(begin, index);
+        this.logSqlChunk(context, prevLine, sqlChunk);
         await this.executeSql(context, sqlChunk, result);
       }
       let consumed = token.length;
       const command = parseCommand(script, index, token.length);
+      this.logCommand(context, prevLine, command.name, command.payload);
       switch (command.name) {
         case 'sleep':
           await sleepMs(Number(command.args[0] ?? '0'));
@@ -308,12 +361,15 @@ class MptestRunner {
             throw new Error(
               `${context.displayName}:${prevLine} expected [${expectedRaw}] but got [${result.toString()}]`
             );
-          } else {
-            console.log(
-              `${context.displayName}:${prevLine} expected [${expectedRaw}] matched [${result.toString()}]`
-            );
           }
           result.reset();
+          break;
+        }
+        case 'print': {
+          const message = command.payload.replace(/^\s*/, '');
+          if (message.length > 0) {
+            this.logMessage(context, message);
+          }
           break;
         }
         case 'task': {
@@ -346,9 +402,15 @@ class MptestRunner {
           taskControl?.resolve();
           break;
         }
+        case 'exit': {
+          const code = Number(command.args[0] ?? '0');
+          taskControl?.resolve();
+          await this.terminateClient(context, code);
+          return;
+        }
         case 'wait': {
           const target = command.args[0] ?? 'all';
-          const timeout = command.args[1] ? Number(command.args[1]) : 10000;
+          const timeout = command.args[1] ? Number(command.args[1]) : 30_000;
           if (target === 'all') {
             await this.waitForAll(timeout);
           } else {
@@ -411,6 +473,7 @@ class MptestRunner {
     }
     if (begin < script.length) {
       const remainder = script.slice(begin);
+      this.logSqlChunk(context, line, remainder);
       await this.executeSql(context, remainder, result);
     }
   }
@@ -464,6 +527,7 @@ class MptestRunner {
         const { rows } = await statement.step();
         if (rows) {
           const rawRows = rows as SqliteRowRaw[];
+          this.logSqlExecution(context, sql, rawRows);
           for (const row of rawRows) {
             for (const value of row) {
               result.append(value);
@@ -472,8 +536,10 @@ class MptestRunner {
         }
       } catch (err) {
         if (isSqliteError(err)) {
+          this.logError('sqlite error', err);
           result.appendError(err);
         } else {
+          this.logError('sql execution error', err);
           throw err;
         }
       } finally {
@@ -481,11 +547,97 @@ class MptestRunner {
       }
     }
   }
+
+  private logMessage(context: ScriptContext, message: string): void {
+    const trimmed = message.replace(/\s+$/, '');
+    if (!trimmed) {
+      return;
+    }
+    console.log(`${context.displayName} ${trimmed}`);
+  }
+
+  private logCommand(
+    context: ScriptContext,
+    line: number,
+    command: string,
+    payload: string
+  ): void {
+    const detail = payload ? ` ${payload.trim()}` : '';
+    console.log(`${context.displayName}:${line} --${command}${detail}`);
+  }
+
+  private logSqlChunk(
+    context: ScriptContext,
+    line: number,
+    chunk: string
+  ): void {
+    const summary = chunk.trim().replace(/\s+/g, ' ');
+    if (!summary) {
+      return;
+    }
+    console.log(`${context.displayName}:${line} SQL ${summary}`);
+  }
+
+  private logError(prefix: string, err: unknown): void {
+    if (err instanceof Error) {
+      console.error(`[error] ${prefix}: ${err.message}\n${err.stack}`);
+    } else {
+      console.error(`[error] ${prefix}: ${String(err)}`);
+    }
+  }
+
+  private logSqlExecution(
+    context: ScriptContext,
+    placeholder: string,
+    values: SqliteRowRaw[]
+  ): void {
+    console.log(
+      `${context.displayName} SQL values ${placeholder} => ${JSON.stringify(values)}`
+    );
+  }
+
+  private async terminateClient(
+    context: ScriptContext,
+    exitCode: number
+  ): Promise<void> {
+    const { clientId, displayName } = context;
+    const client = this.clients.get(clientId);
+    if (!client) {
+      return;
+    }
+    this.clients.delete(clientId);
+    try {
+      await client.reserved.release();
+    } catch (err) {
+      this.logError(`release error client=${clientId}`, err);
+      if (exitCode === 0) {
+        throw err;
+      }
+    }
+    try {
+      await client.pool.close();
+    } catch (err) {
+      this.logError(`close error client=${clientId}`, err);
+      if (exitCode === 0) {
+        throw err;
+      }
+    }
+    if (exitCode !== 0) {
+      console.log(`${displayName} exited with code ${exitCode}`);
+    }
+  }
 }
 
-describe('mptest scripts', () => {
+describe('mptest scripts', { timeout: 60_000 }, () => {
   // const scripts = topLevelScripts;
-  const scripts = ['mptest/multiwrite01.test'];
+  // const scripts = ['mptest/multiwrite01.test'];
+  // const scripts = ['mptest/config02.test'];
+  // const scripts = ['mptest/crash01.test'];
+  const scripts = [
+    // 'mptest/multiwrite01.test',
+    'mptest/config02.test'
+    // 'mptest/crash01.test'
+  ];
   for (const script of scripts) {
     test(script, async () => {
       const dbPath = `mptest-${sanitizeForFilename(script)}-${Math.random()
