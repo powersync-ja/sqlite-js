@@ -92,6 +92,15 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
     return (this as unknown as WithModule)._module;
   }
 
+  get #accessHandleOptions() {
+    return { mode: this.readonly ? 'read-only' : 'readwrite' };
+  }
+
+  get #lockOptions() {
+    return { mode: this.readonly ? 'shared' : 'exclusive' } as const;
+    // return { mode: 'shared' as const };
+  }
+
   async #initialize(nTemporaryFiles) {
     // Delete temporary directories no longer in use.
     const root = await navigator.storage.getDirectory();
@@ -130,9 +139,9 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
     // Populate temporary directory.
     for (let i = 0; i < nTemporaryFiles; i++) {
       const tmpFile = await tmpDir.getFileHandle(`${i}.tmp`, { create: true });
-      const tmpAccessHandle = await (tmpFile as any).createSyncAccessHandle({
-        mode: this.readonly ? 'read-only' : 'readwrite'
-      });
+      const tmpAccessHandle = await (tmpFile as any).createSyncAccessHandle(
+        this.#accessHandleOptions
+      );
       this.unboundAccessHandles.add(tmpAccessHandle);
     }
   }
@@ -531,9 +540,7 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
               if (subPersistentFile) {
                 subPersistentFile.accessHandle = await (
                   subPersistentFile.fileHandle as any
-                ).createSyncAccessHandle({
-                  mode: this.readonly ? 'read-only' : 'readwrite'
-                });
+                ).createSyncAccessHandle(this.#accessHandleOptions);
               }
             })
           );
@@ -574,18 +581,14 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
       setTimeout(notify);
 
       this.log?.(`lock requested: ${lockName}`);
-      navigator.locks.request(
-        lockName,
-        { mode: this.readonly ? 'shared' : 'exclusive' },
-        (lock) => {
-          // We have the lock. Stop asking other connections for it.
-          this.log?.(`lock acquired: ${lockName}`, lock);
-          clearInterval(notifyId);
-          return new Promise<() => void>((res) => {
-            resolve(res as () => void);
-          });
-        }
-      );
+      navigator.locks.request(lockName, this.#lockOptions, (lock) => {
+        // We have the lock. Stop asking other connections for it.
+        this.log?.(`lock acquired: ${lockName}`, lock);
+        clearInterval(notifyId);
+        return new Promise<() => void>((res) => {
+          resolve(res as () => void);
+        });
+      });
     });
   }
 }

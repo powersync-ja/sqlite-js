@@ -190,7 +190,6 @@ class StatementImpl implements SqliteDriverStatement {
   }
 
   async _finalize() {
-    console.log('finalizing...', this.con.path);
     // Wait for these to complete, but ignore any errors.
     // TODO: also wait for run/step to complete
     await this.preparePromise;
@@ -278,7 +277,6 @@ export class WaSqliteConnection implements SqliteDriverConnection {
 
   async close() {
     await m.runExclusive(async () => {
-      console.log('closing...', this.path);
       for (let statement of this.statements) {
         if (statement.options.persist) {
           statement.finalize();

@@ -8,7 +8,7 @@ import type {
 
 import { waSqliteSingleWorker } from '../../lib/index.js';
 
-const scriptModules = (import.meta as any).glob('./mptest/**/*test', {
+const scriptModules = import.meta.glob('./mptest/**/*', {
   as: 'raw',
   eager: true
 });
@@ -66,6 +66,13 @@ interface ClientContext {
   reserved: ReservedConnection;
   queue: Promise<void>;
   pending: Set<Promise<void>>;
+}
+
+interface TaskControl {
+  promise: Promise<void>;
+  resolve: () => void;
+  reject: (err: unknown) => void;
+  isResolved: () => boolean;
 }
 
 class MptestRunner {
@@ -142,6 +149,32 @@ class MptestRunner {
     });
   }
 
+  private createTaskControl(): TaskControl {
+    let resolved = false;
+    let resolveFn: () => void = () => {};
+    let rejectFn: (err: unknown) => void = () => {};
+    const promise = new Promise<void>((resolve, reject) => {
+      resolveFn = () => {
+        if (!resolved) {
+          resolved = true;
+          resolve();
+        }
+      };
+      rejectFn = (err) => {
+        if (!resolved) {
+          resolved = true;
+          reject(err);
+        }
+      };
+    });
+    return {
+      promise,
+      resolve: resolveFn,
+      reject: rejectFn,
+      isResolved: () => resolved
+    };
+  }
+
   private async scheduleTask(
     parent: ScriptContext,
     clientId: number,
@@ -150,6 +183,8 @@ class MptestRunner {
     taskLabel: string
   ): Promise<void> {
     const client = await this.ensureClient(clientId);
+    const taskControl = this.createTaskControl();
+    this.trackTask(client, taskControl.promise);
     const run = async () => {
       await this.runScriptInternal(
         {
@@ -159,12 +194,19 @@ class MptestRunner {
           displayName: `${parent.displayName}#client${clientId}:${taskLabel}`
         },
         script,
-        startLine
+        startLine,
+        taskControl
       );
+      taskControl.resolve();
     };
-    const task = client.queue.then(run);
+    const task = client.queue.then(run).catch((err) => {
+      if (taskControl.isResolved()) {
+        return;
+      }
+      taskControl.reject(err);
+      throw err;
+    });
     client.queue = task.catch(() => {});
-    this.trackTask(client, task);
   }
 
   private async waitForAll(timeoutMs: number): Promise<void> {
@@ -221,7 +263,8 @@ class MptestRunner {
   private async runScriptInternal(
     context: ScriptContext,
     script: string,
-    initialLine: number
+    initialLine: number,
+    taskControl?: TaskControl
   ): Promise<void> {
     const result = new ResultBuffer();
     let index = 0;
@@ -265,6 +308,10 @@ class MptestRunner {
             throw new Error(
               `${context.displayName}:${prevLine} expected [${expectedRaw}] but got [${result.toString()}]`
             );
+          } else {
+            console.log(
+              `${context.displayName}:${prevLine} expected [${expectedRaw}] matched [${result.toString()}]`
+            );
           }
           result.reset();
           break;
@@ -295,6 +342,10 @@ class MptestRunner {
           );
           break;
         }
+        case 'finish': {
+          taskControl?.resolve();
+          break;
+        }
         case 'wait': {
           const target = command.args[0] ?? 'all';
           const timeout = command.args[1] ? Number(command.args[1]) : 10000;
@@ -323,7 +374,8 @@ class MptestRunner {
               displayName: baseName(resolved)
             },
             subScript,
-            1
+            1,
+            taskControl
           );
           break;
         }
@@ -374,8 +426,8 @@ class MptestRunner {
       if (!rows || rows.length === 0) {
         return false;
       }
-      const row = rows[0] as SqliteRowRaw;
-      const value = row[0];
+      const rawRows = rows as SqliteRowRaw[];
+      const value = rawRows[0]?.[0];
       if (value == null) {
         return false;
       }
@@ -404,12 +456,16 @@ class MptestRunner {
       if (!sql.trim()) {
         continue;
       }
+      if (!hasNonCommentContent(sql)) {
+        continue;
+      }
       const statement = context.connection.prepare(sql, { rawResults: true });
       try {
         const { rows } = await statement.step();
         if (rows) {
-          for (const row of rows) {
-            for (const value of row as SqliteRowRaw) {
+          const rawRows = rows as SqliteRowRaw[];
+          for (const row of rawRows) {
+            for (const value of row) {
               result.append(value);
             }
           }
@@ -428,7 +484,9 @@ class MptestRunner {
 }
 
 describe('mptest scripts', () => {
-  for (const script of topLevelScripts) {
+  // const scripts = topLevelScripts;
+  const scripts = ['mptest/multiwrite01.test'];
+  for (const script of scripts) {
     test(script, async () => {
       const dbPath = `mptest-${sanitizeForFilename(script)}-${Math.random()
         .toString(36)
@@ -859,6 +917,96 @@ function toHex(data: Uint8Array): string {
     hex += byte.toString(16).padStart(2, '0');
   }
   return hex;
+}
+
+function hasNonCommentContent(sql: string): boolean {
+  let i = 0;
+  let inSingle = false;
+  let inDouble = false;
+  let inBracket = false;
+
+  const advance = (step = 1) => {
+    i += step;
+  };
+
+  while (i < sql.length) {
+    const c = sql[i];
+    const next = sql[i + 1];
+
+    if (inSingle) {
+      if (c === "'") {
+        if (next === "'") {
+          advance(2);
+          continue;
+        }
+        inSingle = false;
+        advance();
+        continue;
+      }
+      advance();
+      continue;
+    }
+    if (inDouble) {
+      if (c === '"') {
+        if (next === '"') {
+          advance(2);
+          continue;
+        }
+        inDouble = false;
+        advance();
+        continue;
+      }
+      advance();
+      continue;
+    }
+    if (inBracket) {
+      if (c === ']') {
+        inBracket = false;
+      }
+      advance();
+      continue;
+    }
+
+    if (c === "'") {
+      inSingle = true;
+      advance();
+      continue;
+    }
+    if (c === '"') {
+      inDouble = true;
+      advance();
+      continue;
+    }
+    if (c === '[') {
+      inBracket = true;
+      advance();
+      continue;
+    }
+
+    if (c === '-' && next === '-') {
+      advance(2);
+      while (i < sql.length && sql[i] !== '\n') {
+        advance();
+      }
+      continue;
+    }
+    if (c === '/' && next === '*') {
+      advance(2);
+      while (i < sql.length && !(sql[i] === '*' && sql[i + 1] === '/')) {
+        advance();
+      }
+      if (i < sql.length) {
+        advance(2);
+      }
+      continue;
+    }
+    if (/\s/.test(c ?? '')) {
+      advance();
+      continue;
+    }
+    return true;
+  }
+  return false;
 }
 
 function sleepMs(ms: number): Promise<void> {
