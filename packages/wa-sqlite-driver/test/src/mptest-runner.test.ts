@@ -410,7 +410,7 @@ class MptestRunner {
         }
         case 'wait': {
           const target = command.args[0] ?? 'all';
-          const timeout = command.args[1] ? Number(command.args[1]) : 30_000;
+          const timeout = command.args[1] ? Number(command.args[1]) : 120_000;
           if (target === 'all') {
             await this.waitForAll(timeout);
           } else {

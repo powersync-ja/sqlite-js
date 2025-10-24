@@ -13,18 +13,14 @@ setupDriverWorker({
     if (vfs != null) {
       throw new Error('Can only open one connection');
     }
-    // vfs = await OPFSCoopSyncVFS2.create(
-    //   'test.db',
-    //   module,
-    //   options.readonly ?? false
-    // );
+    vfs = await OPFSCoopSyncVFS2.create(
+      'test.db',
+      module,
+      options.readonly ?? false
+    );
     // IDBBatchAtomicVFS - breaks hard (database disk image is malformed)
-    vfs = await (IDBBatchAtomicVFS0 as any).create('test.db', module);
+    // vfs = await (IDBBatchAtomicVFS0 as any).create('test.db', module);
     // OPFSAdaptiveVFS - works great
-    // vfs = await (OPFSAdaptiveVFS as any).create('test.db', module, {
-    //   ifAvailable: true,
-    //   mode: 'shared'
-    // });
     // vfs = await (OPFSAdaptiveVFS as any).create('test.db', module, {
     //   ifAvailable: true,
     //   mode: 'shared'
@@ -37,8 +33,8 @@ setupDriverWorker({
     sqlite3.vfs_register(vfs as any, true);
 
     const con = await WaSqliteConnection.open(options.path);
-    using stmt = await con.prepare('PRAGMA busy_timeout = 10000');
-    await stmt.step();
+    // using stmt = await con.prepare('PRAGMA busy_timeout = 10000');
+    // await stmt.step();
     return con;
   }
 });
