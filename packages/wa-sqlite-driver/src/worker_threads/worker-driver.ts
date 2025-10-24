@@ -70,14 +70,6 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
     return this.post('open', this.options);
   }
 
-  async lock(mode: 'exclusive' | 'shared' | 'deferred'): Promise<void> {
-    await this._send({ type: SqliteCommandType.lock, mode: mode });
-  }
-
-  release(): void {
-    this._send({ type: SqliteCommandType.release });
-  }
-
   prepare(sql: string, options?: PrepareOptions): WorkerDriverStatement {
     const id = this.nextId++;
     this.buffer.push({

@@ -257,7 +257,6 @@ export class WaSqliteConnection implements SqliteDriverConnection {
   vfs: OPFSCoopSyncVFS2;
 
   statements = new Set<StatementImpl>();
-  lockDisposer: Disposable | null = null;
 
   static async open(
     filename: string,
@@ -275,15 +274,6 @@ export class WaSqliteConnection implements SqliteDriverConnection {
   ) {
     this.db = db;
     this.vfs = vfs;
-  }
-
-  async lock() {
-    this.lockDisposer = await this.vfs.prelock(this.path);
-  }
-
-  release() {
-    this.lockDisposer[Symbol.dispose]();
-    this.lockDisposer = null;
   }
 
   async close() {

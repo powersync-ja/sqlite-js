@@ -37,7 +37,6 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
       async () => {
         // TODO: sync
         if (this.inUse === reserved) {
-          reserved.connection.release?.();
           this.inUse = null;
           Promise.resolve().then(() => this.next());
         }
@@ -46,9 +45,6 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
 
     if (this.inUse == null) {
       this.inUse = reserved;
-      await reserved.connection.lock?.(
-        options?.readonly ? 'shared' : 'exclusive'
-      );
       return reserved;
     } else {
       const promise = new Promise<ReservedConnection>((resolve, reject) => {
@@ -70,9 +66,6 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
 
       return promise.then(async (r) => {
         this.inUse = reserved;
-        await reserved.connection.lock?.(
-          options?.readonly ? 'shared' : 'exclusive'
-        );
         return r;
       });
     }

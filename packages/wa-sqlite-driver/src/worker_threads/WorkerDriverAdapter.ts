@@ -115,10 +115,6 @@ export class WorkerConnectionAdapter implements WorkerDriver {
         return this._parse(command);
       case SqliteCommandType.changes:
         return this.connnection.getLastChanges();
-      case SqliteCommandType.lock:
-        return this.connnection.lock?.(command.mode);
-      case SqliteCommandType.release:
-        return this.connnection.release?.();
       default:
         throw new Error(`Unknown command: ${command.type}`);
     }

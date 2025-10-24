@@ -92,20 +92,6 @@ export class OPFSCoopSyncVFS2 extends FacadeVFS {
     return (this as unknown as WithModule)._module;
   }
 
-  async prelock(fileName: string): Promise<Disposable> {
-    const file = this.persistentFiles.get('/' + fileName);
-    this.log?.('prelock', fileName, file);
-    await this.#requestAccessHandle(file);
-    this.log?.('prelocked', fileName);
-    const self = this;
-    return {
-      [Symbol.dispose]() {
-        this.log?.('prelock release', fileName);
-        self.#releaseAccessHandle(file);
-      }
-    };
-  }
-
   async #initialize(nTemporaryFiles) {
     // Delete temporary directories no longer in use.
     const root = await navigator.storage.getDirectory();
