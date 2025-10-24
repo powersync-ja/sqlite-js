@@ -1,5 +1,7 @@
 import * as SQLite from '@journeyapps/wa-sqlite';
 import SQLiteESMFactory from '@journeyapps/wa-sqlite/dist/wa-sqlite-async.mjs';
+// import * as SQLite from 'wa-sqlite';
+// import SQLiteESMFactory from 'wa-sqlite/dist/wa-sqlite-async.mjs';
 import {
   PrepareOptions,
   ResetOptions,
@@ -14,10 +16,10 @@ import {
   UpdateListener
 } from '@sqlite-js/driver';
 import * as mutex from 'async-mutex';
-import { OPFSCoopSyncVFS2 } from './OPFSCoopSyncVFS2';
 
 // Initialize SQLite.
 export const module = await SQLiteESMFactory();
+console.log('module', module);
 export const sqlite3 = SQLite.Factory(module);
 
 const m = new mutex.Mutex();
@@ -233,7 +235,8 @@ class StatementImpl implements SqliteDriverStatement {
       while ((await sqlite3.step(stmt)) === SQLite.SQLITE_ROW) {}
 
       const changes = sqlite3.changes(this.db);
-      const lastInsertRowId = BigInt(sqlite3.last_insert_id(this.db));
+      // const lastInsertRowId = BigInt(sqlite3.last_insert_id(this.db));
+      const lastInsertRowId = 0n;
 
       return { changes, lastInsertRowId };
     } catch (e: any) {
@@ -253,26 +256,20 @@ class StatementImpl implements SqliteDriverStatement {
 
 export class WaSqliteConnection implements SqliteDriverConnection {
   db: number;
-  vfs: OPFSCoopSyncVFS2;
 
   statements = new Set<StatementImpl>();
 
-  static async open(
-    filename: string,
-    vfs: OPFSCoopSyncVFS2
-  ): Promise<WaSqliteConnection> {
+  static async open(filename: string): Promise<WaSqliteConnection> {
     // Open the database.
     const db = await sqlite3.open_v2(filename);
-    return new WaSqliteConnection(db, vfs, filename);
+    return new WaSqliteConnection(db, filename);
   }
 
   constructor(
     db: number,
-    vfs: OPFSCoopSyncVFS2,
     public path: string
   ) {
     this.db = db;
-    this.vfs = vfs;
   }
 
   async close() {
@@ -290,7 +287,8 @@ export class WaSqliteConnection implements SqliteDriverConnection {
 
   async getLastChanges(): Promise<SqliteChanges> {
     const changes = sqlite3.changes(this.db);
-    const lastInsertRowId = BigInt(sqlite3.last_insert_id(this.db));
+    // const lastInsertRowId = BigInt(sqlite3.last_insert_id(this.db));
+    const lastInsertRowId = 0n;
 
     return { changes, lastInsertRowId };
   }

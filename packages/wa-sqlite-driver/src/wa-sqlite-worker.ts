@@ -4,6 +4,8 @@ import { setupDriverWorker } from './worker_threads';
 import { IDBBatchAtomicVFS } from '@journeyapps/wa-sqlite/src/examples/IDBBatchAtomicVFS.js';
 import { OPFSAdaptiveVFS } from '@journeyapps/wa-sqlite/src/examples/OPFSAdaptiveVFS.js';
 import { OPFSPermutedVFS } from '@journeyapps/wa-sqlite/src/examples/OPFSPermutedVFS.js';
+import { IDBBatchAtomicVFS as IDBBatchAtomicVFS0 } from 'wa-sqlite/src/examples/IDBBatchAtomicVFS.js';
+
 let vfs: any | null = null;
 setupDriverWorker({
   async openConnection(options) {
@@ -17,7 +19,7 @@ setupDriverWorker({
     //   options.readonly ?? false
     // );
     // IDBBatchAtomicVFS - breaks hard (database disk image is malformed)
-    // vfs = await (IDBBatchAtomicVFS as any).create('test.db', module);
+    vfs = await (IDBBatchAtomicVFS0 as any).create('test.db', module);
     // OPFSAdaptiveVFS - works great
     // vfs = await (OPFSAdaptiveVFS as any).create('test.db', module, {
     //   ifAvailable: true,
@@ -29,12 +31,12 @@ setupDriverWorker({
     // });
 
     // database disk image is malformed
-    vfs = await (OPFSPermutedVFS as any).create('test.db', module);
+    // vfs = await (OPFSPermutedVFS as any).create('test.db', module);
 
     // @ts-ignore
     sqlite3.vfs_register(vfs as any, true);
 
-    const con = await WaSqliteConnection.open(options.path, vfs);
+    const con = await WaSqliteConnection.open(options.path);
     using stmt = await con.prepare('PRAGMA busy_timeout = 10000');
     await stmt.step();
     return con;

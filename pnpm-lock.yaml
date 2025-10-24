@@ -154,8 +154,8 @@ importers:
         specifier: ^0.5.0
         version: 0.5.0
       wa-sqlite:
-        specifier: ^1.0.0
-        version: 1.0.0
+        specifier: git@github.com:rhashimoto/wa-sqlite.git#v1.0.9
+        version: https://codeload.github.com/rhashimoto/wa-sqlite/tar.gz/a3b1324ed5a57928141b02eb3204421e1164ed53
     devDependencies:
       '@sqlite-js/driver-tests':
         specifier: workspace:^
@@ -2645,8 +2645,9 @@ packages:
       jsdom:
         optional: true
 
-  wa-sqlite@1.0.0:
-    resolution: {integrity: sha512-Kyybo5/BaJp76z7gDWGk2J6Hthl4NIPsE+swgraEjy3IY6r5zIR02wAs1OJH4XtJp1y3puj3Onp5eMGS0z7nUA==}
+  wa-sqlite@https://codeload.github.com/rhashimoto/wa-sqlite/tar.gz/a3b1324ed5a57928141b02eb3204421e1164ed53:
+    resolution: {tarball: https://codeload.github.com/rhashimoto/wa-sqlite/tar.gz/a3b1324ed5a57928141b02eb3204421e1164ed53}
+    version: 1.0.9
 
   wait-port@1.1.0:
     resolution: {integrity: sha512-3e04qkoN3LxTMLakdqeWth8nih8usyg+sf1Bgdf9wwUkp05iuK1eSY/QpLvscT/+F/gA89+LpUmmgBtesbqI2Q==}
@@ -5285,7 +5286,7 @@ snapshots:
       - supports-color
       - terser
 
-  wa-sqlite@1.0.0: {}
+  wa-sqlite@https://codeload.github.com/rhashimoto/wa-sqlite/tar.gz/a3b1324ed5a57928141b02eb3204421e1164ed53: {}
 
   wait-port@1.1.0:
     dependencies:
