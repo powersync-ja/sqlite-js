@@ -1,8 +1,5 @@
-import * as SQLite from '@journeyapps/wa-sqlite';
-// import SQLiteESMFactory from '@journeyapps/wa-sqlite/dist/wa-sqlite-async.mjs';
-import SQLiteESMFactory from '@journeyapps/wa-sqlite/dist/wa-sqlite.mjs';
-// import * as SQLite from 'wa-sqlite';
-// import SQLiteESMFactory from 'wa-sqlite/dist/wa-sqlite-async.mjs';
+import * as SQLite from 'wa-sqlite';
+import SQLiteESMFactory from 'wa-sqlite/dist/wa-sqlite-async.mjs';
 import {
   PrepareOptions,
   ResetOptions,
