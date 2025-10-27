@@ -2,249 +2,308 @@ import * as SQLite from 'wa-sqlite';
 import SQLiteESMFactory from 'wa-sqlite/dist/wa-sqlite-async.mjs';
 import {
   PrepareOptions,
-  ResetOptions,
+  QueryOptions,
+  SqliteArrayRow,
   SqliteChanges,
   SqliteDriverConnection,
   SqliteDriverStatement,
-  SqliteError,
+  SqliteObjectRow,
   SqliteParameterBinding,
-  SqliteRow,
-  SqliteStepResult,
-  StepOptions,
+  StreamQueryOptions,
   UpdateListener
 } from '@sqlite-js/driver';
+import { SqliteError } from '@sqlite-js/driver';
 import * as mutex from 'async-mutex';
 
-// Initialize SQLite.
 export const module = await SQLiteESMFactory();
-console.log('module', module);
 export const sqlite3 = SQLite.Factory(module);
 
-const m = new mutex.Mutex();
+const globalMutex = new mutex.Mutex();
+
+async function withMutex<T>(fn: () => Promise<T> | T): Promise<T> {
+  return globalMutex.runExclusive(fn);
+}
+
+function toSqliteError(error: any): SqliteError {
+  return new SqliteError({
+    code: 'SQLITE_ERROR',
+    message: error?.message ?? String(error)
+  });
+}
 
 class StatementImpl implements SqliteDriverStatement {
-  private preparePromise: Promise<{ error: SqliteError | null }>;
-  private bindPromise?: Promise<{ error: SqliteError | null }>;
-  private columns: string[] = [];
-
   private statementRef?: number;
-  private done = false;
+  private columns: string[] = [];
+  private finalized = false;
+  private prepared = false;
+
+  readonly persisted: boolean;
 
   constructor(
     private db: number,
-    private con: WaSqliteConnection,
+    private connection: WaSqliteConnection,
     public source: string,
-    public options: PrepareOptions
+    options: PrepareOptions
   ) {
-    this.preparePromise = this.prepare();
+    this.persisted = options.autoFinalize ?? false;
   }
 
-  async prepare() {
-    return await m.runExclusive(() => this._prepare());
-  }
-
-  private async getStatement() {
+  private async prepareStatementIfNeeded(): Promise<void> {
+    if (this.prepared || this.finalized) {
+      if (this.statementRef == null) {
+        throw new SqliteError({
+          code: 'SQLITE_ERROR',
+          message: 'Statement has been finalized'
+        });
+      }
+      return;
+    }
     const statementsIter = sqlite3.statements(this.db, this.source, {
       unscoped: true
     });
-    for await (let statement of statementsIter) {
-      return statement;
-    }
-    throw new Error(`No SQL statements in: ${this.source}`);
-  }
-
-  async _prepare() {
     try {
-      const statement = await this.getStatement();
-      this.statementRef = statement;
-      this.columns = sqlite3.column_names(statement);
-      return { error: null };
-    } catch (e: any) {
-      return {
-        error: new SqliteError({
-          code: 'SQLITE_ERROR',
-          message: e.message
-        })
-      };
+      for await (let statement of statementsIter) {
+        this.statementRef = statement;
+        this.columns = sqlite3.column_names(statement);
+        this.prepared = true;
+        return;
+      }
+    } catch (error) {
+      throw toSqliteError(error);
+    }
+    throw new SqliteError({
+      code: 'SQLITE_ERROR',
+      message: `No SQL statements in: ${this.source}`
+    });
+  }
+
+  private resetStatement(): void {
+    if (this.statementRef == null) {
+      return;
+    }
+    sqlite3.reset(this.statementRef);
+  }
+
+  private clearBindings(): void {
+    if (this.statementRef == null) {
+      return;
+    }
+    const count = sqlite3.bind_parameter_count(this.statementRef);
+    for (let i = 0; i < count; i++) {
+      sqlite3.bind_null(this.statementRef, i + 1);
     }
   }
 
-  private async _waitForPrepare() {
-    const { error } = await (this.bindPromise ?? this.preparePromise);
-    if (error) {
-      throw error;
+  private bindParameters(parameters: SqliteParameterBinding | undefined): void {
+    if (this.statementRef == null || parameters == null) {
+      return;
+    }
+
+    if (Array.isArray(parameters)) {
+      const count = sqlite3.bind_parameter_count(this.statementRef);
+      // Bind any named parameters that correspond to positional indices
+      for (let i = 0; i < count; i++) {
+        const name = sqlite3.bind_parameter_name(this.statementRef, i + 1);
+        if (name === '') {
+          const value = parameters[i];
+          if (typeof value !== 'undefined') {
+            sqlite3.bind(this.statementRef, i + 1, value);
+          }
+        }
+      }
+      for (let i = 0; i < parameters.length; i++) {
+        const value = parameters[i];
+        if (typeof value !== 'undefined') {
+          sqlite3.bind(this.statementRef, i + 1, value);
+        }
+      }
+    } else {
+      const count = sqlite3.bind_parameter_count(this.statementRef);
+      for (let i = 0; i < count; i++) {
+        const name = sqlite3.bind_parameter_name(this.statementRef, i + 1);
+        if (name === '') {
+          continue;
+        }
+        let key = name;
+        if (!(key in parameters) && name.length > 1) {
+          key = name.substring(1);
+        }
+        const value = (parameters as Record<string, any>)[key];
+        if (typeof value !== 'undefined') {
+          sqlite3.bind(this.statementRef, i + 1, value);
+        }
+      }
+    }
+  }
+
+  private mapValue(
+    value: unknown,
+    options?: QueryOptions | StreamQueryOptions
+  ): unknown {
+    const useBigint = options?.bigint ?? false;
+    if (typeof value === 'number') {
+      if (useBigint && Number.isInteger(value)) {
+        return BigInt(value);
+      }
+      return value;
+    }
+    if (typeof value === 'bigint' && !useBigint) {
+      const num = Number(value);
+      // if (!Number.isSafeInteger(num)) {
+      //   return value;
+      // }
+      return num;
+    }
+    return value;
+  }
+
+  private mapRow(
+    row: any[],
+    options: QueryOptions | StreamQueryOptions | undefined,
+    asArray: boolean
+  ): SqliteObjectRow | SqliteArrayRow {
+    if (asArray) {
+      return row.map((value) => this.mapValue(value, options)) as SqliteArrayRow;
+    }
+    const entries = this.columns.map((column, index) => [
+      column,
+      this.mapValue(row[index], options)
+    ]);
+    return Object.fromEntries(entries) as SqliteObjectRow;
+  }
+
+  async all(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteObjectRow[]> {
+    return withMutex(async () => {
+      try {
+        await this.prepareStatementIfNeeded();
+        const stmt = this.statementRef!;
+        this.resetStatement();
+        this.clearBindings();
+        this.bindParameters(parameters);
+        const rows: SqliteObjectRow[] = [];
+        while ((await sqlite3.step(stmt)) === SQLite.SQLITE_ROW) {
+          const row = sqlite3.row(stmt);
+          rows.push(this.mapRow(row, options, false) as SqliteObjectRow);
+        }
+        return rows;
+      } catch (error) {
+        throw toSqliteError(error);
+      } finally {
+        this.resetStatement();
+      }
+    });
+  }
+
+  async allArray(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteArrayRow[]> {
+    return withMutex(async () => {
+      try {
+        await this.prepareStatementIfNeeded();
+        const stmt = this.statementRef!;
+        this.resetStatement();
+        this.clearBindings();
+        this.bindParameters(parameters);
+        const rows: SqliteArrayRow[] = [];
+        while ((await sqlite3.step(stmt)) === SQLite.SQLITE_ROW) {
+          const row = sqlite3.row(stmt);
+          rows.push(this.mapRow(row, options, true) as SqliteArrayRow);
+        }
+        return rows;
+      } catch (error) {
+        throw toSqliteError(error);
+      } finally {
+        this.resetStatement();
+      }
+    });
+  }
+
+  async *stream(
+    parameters?: SqliteParameterBinding,
+    options?: StreamQueryOptions
+  ): AsyncIterableIterator<SqliteObjectRow[]> {
+    const rows = await this.all(parameters, options);
+    if (rows.length === 0) {
+      return;
+    }
+    const chunkSize = options?.chunkMaxRows ?? rows.length;
+    const effectiveChunk = chunkSize > 0 ? chunkSize : rows.length;
+    for (let i = 0; i < rows.length; i += effectiveChunk) {
+      yield rows.slice(i, i + effectiveChunk);
+    }
+  }
+
+  async *streamArray(
+    parameters?: SqliteParameterBinding,
+    options?: StreamQueryOptions
+  ): AsyncIterableIterator<SqliteArrayRow[]> {
+    const rows = await this.allArray(parameters, options);
+    if (rows.length === 0) {
+      return;
+    }
+    const chunkSize = options?.chunkMaxRows ?? rows.length;
+    const effectiveChunk = chunkSize > 0 ? chunkSize : rows.length;
+    for (let i = 0; i < rows.length; i += effectiveChunk) {
+      yield rows.slice(i, i + effectiveChunk);
     }
   }
 
   async getColumns(): Promise<string[]> {
-    await this._waitForPrepare();
-    return sqlite3.column_names(this.statementRef!);
-  }
-
-  bind(parameters: SqliteParameterBinding): void {
-    this.bindPromise = this.preparePromise.then(async (result) => {
-      if (result.error) {
-        return result;
-      }
-      await m.runExclusive(() => this.bindImpl(parameters));
-      return { error: null };
+    return withMutex(async () => {
+      await this.prepareStatementIfNeeded();
+      return this.columns;
     });
   }
 
-  bindImpl(parameters: SqliteParameterBinding): void {
-    if (Array.isArray(parameters)) {
-      const count = sqlite3.bind_parameter_count(this.statementRef!);
-      let pi = 0;
-      for (let i = 0; i < count; i++) {
-        const name = sqlite3.bind_parameter_name(this.statementRef!, i + 1);
-        if (name == '') {
-          const value = parameters[pi];
-          pi++;
-          if (typeof value != 'undefined') {
-            sqlite3.bind(this.statementRef!, i + 1, value);
-          }
-        }
-      }
-
-      for (let i = 0; i < parameters.length; i++) {
-        const value = parameters[i];
-        if (typeof value !== 'undefined') {
-          sqlite3.bind(this.statementRef!, i + 1, value);
-        }
-      }
-    } else if (parameters != null) {
-      const count = sqlite3.bind_parameter_count(this.statementRef!);
-      for (let i = 0; i < count; i++) {
-        const name = sqlite3.bind_parameter_name(this.statementRef!, i + 1);
-        if (name != '') {
-          if (name in parameters) {
-            const value = parameters[name];
-            sqlite3.bind(this.statementRef!, i + 1, value);
-          } else if (name.substring(1) in parameters) {
-            // Removes the prefix of ? : @ $
-            const value = parameters[name.substring(1)];
-            sqlite3.bind(this.statementRef!, i + 1, value);
-          }
-        }
-      }
-    }
-  }
-
-  async step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
-    await this._waitForPrepare();
-
-    return await m.runExclusive(() => this._step(n, options));
-  }
-
-  async _step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
-    try {
-      if (this.done) {
-        return { done: true };
-      }
-
-      const stmt = this.statementRef!;
-
-      let rows: SqliteRow[] = [];
-
-      const mapValue = (value: any) => {
-        if (typeof value == 'number') {
-          return this.options.bigint ? BigInt(value) : value;
-        } else if (typeof value == 'bigint') {
-          return this.options.bigint ? value : Number(value);
-        } else {
-          return value;
-        }
-      };
-      const mapRow = this.options.rawResults
-        ? (row: any) => row.map(mapValue)
-        : (row: any[]) => {
-            return Object.fromEntries(
-              this.columns.map((c, i) => [c, mapValue(row[i])])
-            );
-          };
-      if (n == null) {
+  async run(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteChanges> {
+    return withMutex(async () => {
+      try {
+        await this.prepareStatementIfNeeded();
+        const stmt = this.statementRef!;
+        this.resetStatement();
+        this.clearBindings();
+        this.bindParameters(parameters);
         while ((await sqlite3.step(stmt)) === SQLite.SQLITE_ROW) {
-          const row = sqlite3.row(stmt);
-          rows.push(mapRow(row));
+          // Exhaust results
         }
-        this.done = true;
-        return { rows: rows, done: true };
-      } else {
-        while (
-          rows.length < n &&
-          (await sqlite3.step(stmt)) === SQLite.SQLITE_ROW
-        ) {
-          const row = sqlite3.row(stmt);
-          rows.push(mapRow(row));
-        }
-        const done = rows.length < n;
-        this.done = done;
-        return { rows: rows, done: done };
+        const changes = sqlite3.changes(this.db);
+        const lastInsertRowId = 0n;
+        return { changes, lastInsertRowId };
+      } catch (error) {
+        throw toSqliteError(error);
+      } finally {
+        this.resetStatement();
       }
-    } catch (e: any) {
-      throw new SqliteError({
-        code: 'SQLITE_ERROR',
-        message: e.message
-      });
-    }
-  }
-
-  async _finalize() {
-    // Wait for these to complete, but ignore any errors.
-    // TODO: also wait for run/step to complete
-    await this.preparePromise;
-    await this.bindPromise;
-
-    if (this.statementRef) {
-      sqlite3.finalize(this.statementRef);
-      this.statementRef = undefined;
-    }
+    });
   }
 
   finalize(): void {
-    m.runExclusive(() => this._finalize());
-  }
-
-  reset(options?: ResetOptions): void {
-    this.preparePromise.finally(() => {
-      this.done = false;
-      sqlite3.reset(this.statementRef!);
-
-      if (options?.clearBindings) {
-        // No native clear_bidings?
-        const count = sqlite3.bind_parameter_count(this.statementRef!);
-        for (let i = 0; i < count; i++) {
-          sqlite3.bind_null(this.statementRef!, i + 1);
-        }
-      }
+    void withMutex(() => {
+      this.finalizeInternal();
     });
   }
 
-  async run(options?: StepOptions): Promise<SqliteChanges> {
-    return await m.runExclusive(() => this._run(options));
+  finalizeForClose(): void {
+    this.finalizeInternal();
   }
 
-  async _run(options?: StepOptions): Promise<SqliteChanges> {
-    await this.preparePromise;
-
-    try {
-      this.reset();
-      const stmt = this.statementRef!;
-      while ((await sqlite3.step(stmt)) === SQLite.SQLITE_ROW) {}
-
-      const changes = sqlite3.changes(this.db);
-      // const lastInsertRowId = BigInt(sqlite3.last_insert_id(this.db));
-      const lastInsertRowId = 0n;
-
-      return { changes, lastInsertRowId };
-    } catch (e: any) {
-      throw new SqliteError({
-        code: 'SQLITE_ERROR',
-        message: e.message
-      });
-    } finally {
-      this.reset();
+  private finalizeInternal() {
+    if (this.finalized) {
+      return;
     }
+    this.finalized = true;
+    if (this.statementRef != null) {
+      sqlite3.finalize(this.statementRef);
+      this.statementRef = undefined;
+    }
+    this.connection.unregisterStatement(this);
   }
 
   [Symbol.dispose](): void {
@@ -253,58 +312,46 @@ class StatementImpl implements SqliteDriverStatement {
 }
 
 export class WaSqliteConnection implements SqliteDriverConnection {
-  db: number;
+  private statements = new Set<StatementImpl>();
 
-  statements = new Set<StatementImpl>();
+  constructor(
+    private db: number,
+    public path: string
+  ) {}
 
   static async open(filename: string): Promise<WaSqliteConnection> {
-    // Open the database.
     const db = await sqlite3.open_v2(filename);
     return new WaSqliteConnection(db, filename);
   }
 
-  constructor(
-    db: number,
-    public path: string
-  ) {
-    this.db = db;
+  registerStatement(statement: StatementImpl) {
+    this.statements.add(statement);
+  }
+
+  unregisterStatement(statement: StatementImpl) {
+    this.statements.delete(statement);
   }
 
   async close() {
-    await m.runExclusive(async () => {
-      for (let statement of this.statements) {
-        if (statement.options.persist) {
-          statement.finalize();
-        }
+    await withMutex(async () => {
+      for (let statement of Array.from(this.statements)) {
+        statement.finalizeForClose();
       }
-
+      this.statements.clear();
       await new Promise((resolve) => setTimeout(resolve, 100));
       await sqlite3.close(this.db);
     });
   }
 
-  async getLastChanges(): Promise<SqliteChanges> {
-    const changes = sqlite3.changes(this.db);
-    // const lastInsertRowId = BigInt(sqlite3.last_insert_id(this.db));
-    const lastInsertRowId = 0n;
-
-    return { changes, lastInsertRowId };
-  }
-
   prepare(sql: string, options?: PrepareOptions): StatementImpl {
-    const st = new StatementImpl(this.db, this, sql, options ?? {});
-    // TODO: cleanup on finalize
-    this.statements.add(st);
-    return st;
-  }
-
-  dispose(): void {
-    // No-op
+    const statement = new StatementImpl(this.db, this, sql, options ?? {});
+    this.registerStatement(statement);
+    return statement;
   }
 
   onUpdate(
-    listener: UpdateListener,
-    options?:
+    _listener: UpdateListener,
+    _options?:
       | { tables?: string[] | undefined; batchLimit?: number | undefined }
       | undefined
   ): () => void {

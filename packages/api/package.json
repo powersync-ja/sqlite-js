@@ -8,8 +8,12 @@
     "test": "vitest",
     "clean": "tsc -b --clean && rm -rf lib"
   },
+  "types": "./lib/index.d.ts",
   "exports": {
-    ".": "./lib/index.js"
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    }
   },
   "keywords": [],
   "author": "",

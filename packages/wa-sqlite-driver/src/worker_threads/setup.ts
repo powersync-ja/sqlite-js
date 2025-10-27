@@ -1,9 +1,12 @@
 import { Deferred } from './deferred.js';
-import { isErrorResponse, WorkerDriver } from './async-commands.js';
+import {
+  isErrorResponse,
+  WorkerDriver
+} from '@sqlite-js/driver/worker/protocol';
 
 import type { WorkerDriverConnectionOptions } from './worker-driver.js';
 import { SqliteDriverConnection } from '@sqlite-js/driver';
-import { WorkerConnectionAdapter } from './WorkerDriverAdapter.js';
+import { WorkerConnectionAdapter } from '@sqlite-js/driver/worker/connection-adapter';
 
 export type { WorkerDriverConnectionOptions };
 

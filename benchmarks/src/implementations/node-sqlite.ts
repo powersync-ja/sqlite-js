@@ -1,9 +1,8 @@
 import { promises as fs } from 'fs';
 import assert from 'node:assert';
 import { join } from 'path';
-import Prando from 'prando';
 import { Benchmark } from '../Benchmark.js';
-import { numberName } from '../util.js';
+import { numberName, createRandom } from '../util.js';
 
 //@ts-ignore
 import * as sqlite from 'node:sqlite';
@@ -11,7 +10,7 @@ import * as sqlite from 'node:sqlite';
 export class NodeSqliteImpl extends Benchmark {
   private db!: sqlite.DatabaseSync;
   private dir: string;
-  private random = new Prando.default(0);
+  private random = createRandom(0);
 
   constructor(
     public name: string,

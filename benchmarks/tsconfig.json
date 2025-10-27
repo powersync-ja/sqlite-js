@@ -5,11 +5,14 @@
     "target": "ES2022",
     "strict": true,
     "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "outDir": "lib",
     "sourceMap": true,
     "declaration": true,
     "rootDir": "src",
-    "typeRoots": ["./src/types", "./node_modules/@types"]
+    "typeRoots": ["./src/types", "./node_modules/@types"],
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
   },
   "include": ["src"],
   "references": [{ "path": "../packages/api" }]

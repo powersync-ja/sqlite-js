@@ -2,7 +2,8 @@
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022", "DOM"],
-    "noEmit": true
+    "noEmit": true,
+    "outDir": "lib"
   },
   "include": ["src"],
   "references": [{ "path": "../" }]

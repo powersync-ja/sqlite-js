@@ -12,13 +12,13 @@ setupDriverWorker({
     if (vfs != null) {
       throw new Error('Can only open one connection');
     }
-    // vfs = await OPFSCoopSyncVFS2.create(
-    //   'test.db',
-    //   module,
-    //   options.readonly ?? false
-    // );
+    vfs = await OPFSCoopSyncVFS2.create(
+      'test.db',
+      module,
+      options.readonly ?? false
+    );
     // IDBBatchAtomicVFS - breaks hard (database disk image is malformed)
-    vfs = await (IDBBatchAtomicVFS as any).create('test.db', module);
+    // vfs = await (IDBBatchAtomicVFS as any).create('test.db', module);
     // OPFSAdaptiveVFS - works great
     // vfs = await (OPFSAdaptiveVFS as any).create('test.db', module, {
     //   ifAvailable: true,

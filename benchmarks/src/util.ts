@@ -1,3 +1,5 @@
+import * as Prando from 'prando';
+
 const digits = [
   '',
   'one',
@@ -33,6 +35,28 @@ const names100 = [
   ...digits.map((digit) => `eighty${digit != '' ? '-' + digit : ''}`),
   ...digits.map((digit) => `ninety${digit != '' ? '-' + digit : ''}`)
 ];
+
+type PrandoInstance = import('prando').default;
+type PrandoConstructor = new (seed?: number | string) => PrandoInstance;
+
+function resolvePrandoConstructor(): PrandoConstructor {
+  const mod = Prando as unknown as {
+    default?: PrandoConstructor;
+  };
+  if (typeof (Prando as unknown) === 'function') {
+    return Prando as unknown as PrandoConstructor;
+  }
+  if (mod.default) {
+    return mod.default;
+  }
+  throw new Error('Unable to locate Prando constructor');
+}
+
+const PRANDO_CTOR = resolvePrandoConstructor();
+
+export function createRandom(seed?: number | string): PrandoInstance {
+  return new PRANDO_CTOR(seed);
+}
 
 export function numberName(n: number): string {
   if (n == 0) {

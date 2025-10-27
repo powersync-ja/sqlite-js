@@ -1,16 +1,15 @@
 import { Benchmark } from '../Benchmark.js';
 import { join } from 'path';
 import { promises as fs } from 'fs';
-import Prando from 'prando';
 import assert from 'node:assert';
-import { numberName } from '../util.js';
+import { numberName, createRandom } from '../util.js';
 import sqlite3 from 'sqlite3';
 import { open, Database } from 'sqlite';
 
 export class NodeSqlite3Impl extends Benchmark {
   private db!: Database;
   private dir: string;
-  private random = new Prando.default(0);
+  private random = createRandom(0);
 
   constructor(
     public name: string,

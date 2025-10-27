@@ -30,11 +30,11 @@ describe('concurrency tests', () => {
       using s1 = connection.prepare(
         'create table test_data(id integer primary key, data text)'
       );
-      await s1.step();
+      await s1.run();
       using s2 = connection.prepare(
         "insert into test_data(data) values('test')"
       );
-      await s2.step();
+      await s2.run();
     }
 
     let promises: Promise<void>[] = [];
@@ -47,15 +47,15 @@ describe('concurrency tests', () => {
         });
 
         using b = connection.prepare('begin immediate');
-        await b.step();
+        await b.run();
         using s = connection.prepare('select * from test_data');
-        const { rows } = await s.step();
+        const rows = await s.all();
 
         expect(rows).toEqual([{ id: 1, data: 'test' }]);
         await new Promise((resolve) => setTimeout(resolve, 500));
 
         using e = connection.prepare('commit');
-        await e.step();
+        await e.run();
         console.log('tx done in', Date.now() - start);
       })();
       promises.push(p);
@@ -70,15 +70,15 @@ describe('concurrency tests', () => {
         });
 
         using b = connection.prepare('begin immediate');
-        await b.step();
+        await b.run();
         using s = connection.prepare('select * from test_data');
-        const { rows } = await s.step();
+        const rows = await s.all();
 
         expect(rows).toEqual([{ id: 1, data: 'test' }]);
         await new Promise((resolve) => setTimeout(resolve, 500));
 
         using e = connection.prepare('commit');
-        await e.step();
+        await e.run();
         console.log('tx done in', Date.now() - start);
       })();
       promises.push(p);

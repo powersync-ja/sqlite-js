@@ -2,8 +2,8 @@ import { describe, test } from '@sqlite-js/driver-tests';
 import { SqliteError, SqliteValue } from '@sqlite-js/driver';
 import type {
   ReservedConnection,
-  SqliteDriverConnectionPool,
-  SqliteRowRaw
+  SqliteArrayRow,
+  SqliteDriverConnectionPool
 } from '@sqlite-js/driver';
 
 import { waSqliteSingleWorker } from '../../lib/index.js';
@@ -11,11 +11,11 @@ import { waSqliteSingleWorker } from '../../lib/index.js';
 const scriptModules = import.meta.glob('./mptest/**/*', {
   as: 'raw',
   eager: true
-});
+}) as Record<string, string>;
 
 const scriptMap = new Map<string, string>();
 for (const [key, value] of Object.entries(scriptModules)) {
-  scriptMap.set(normalizePath(key), value as string);
+  scriptMap.set(normalizePath(key), value);
 }
 
 const topLevelScripts = [...scriptMap.keys()]
@@ -483,14 +483,13 @@ class MptestRunner {
     expr: string
   ): Promise<boolean> {
     const sql = `SELECT ${expr}`;
-    const statement = context.connection.prepare(sql, { rawResults: true });
+    const statement = context.connection.prepare(sql);
     try {
-      const { rows } = await statement.step();
-      if (!rows || rows.length === 0) {
+      const rows = await statement.allArray();
+      if (rows.length === 0) {
         return false;
       }
-      const rawRows = rows as SqliteRowRaw[];
-      const value = rawRows[0]?.[0];
+      const value = rows[0]?.[0];
       if (value == null) {
         return false;
       }
@@ -522,13 +521,12 @@ class MptestRunner {
       if (!hasNonCommentContent(sql)) {
         continue;
       }
-      const statement = context.connection.prepare(sql, { rawResults: true });
+      const statement = context.connection.prepare(sql);
       try {
-        const { rows } = await statement.step();
-        if (rows) {
-          const rawRows = rows as SqliteRowRaw[];
-          this.logSqlExecution(context, sql, rawRows);
-          for (const row of rawRows) {
+        const rows = await statement.allArray();
+        if (rows.length > 0) {
+          this.logSqlExecution(context, sql, rows);
+          for (const row of rows) {
             for (const value of row) {
               result.append(value);
             }
@@ -589,7 +587,7 @@ class MptestRunner {
   private logSqlExecution(
     context: ScriptContext,
     placeholder: string,
-    values: SqliteRowRaw[]
+    values: SqliteArrayRow[]
   ): void {
     console.log(
       `${context.displayName} SQL values ${placeholder} => ${JSON.stringify(values)}`

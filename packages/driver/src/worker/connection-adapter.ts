@@ -2,13 +2,11 @@ import {
   SqliteChanges,
   SqliteDriverConnection,
   SqliteDriverStatement,
-  SqliteStepResult,
   UpdateListener
-} from '@sqlite-js/driver';
-import { mapError } from '@sqlite-js/driver/util';
+} from '../driver-api.js';
+import { mapError } from '../util/errors.js';
 import {
   InferBatchResult,
-  SqliteBind,
   SqliteCommand,
   SqliteCommandResponse,
   SqliteCommandType,
@@ -16,22 +14,19 @@ import {
   SqliteParse,
   SqliteParseResult,
   SqlitePrepare,
-  SqliteReset,
+  SqliteQuery,
+  SqliteQueryResult,
   SqliteRun,
-  SqliteStep,
   WorkerDriver
-} from './async-commands.js';
+} from './protocol.js';
 
 export class WorkerConnectionAdapter implements WorkerDriver {
   constructor(public connnection: SqliteDriverConnection) {}
 
   statements = new Map<number, SqliteDriverStatement>();
-  private promise: Promise<void> = Promise.resolve();
 
   async close() {
-    const p = this.promise.then(() => this.connnection.close());
-    this.promise = p;
-    return p;
+    await this.connnection.close();
   }
 
   private requireStatement(id: number) {
@@ -53,9 +48,7 @@ export class WorkerConnectionAdapter implements WorkerDriver {
     }
 
     const statement = this.connnection.prepare(sql, {
-      bigint: command.bigint,
-      persist: command.persist,
-      rawResults: command.rawResults
+      autoFinalize: command.autoFinalize
     });
     this.statements.set(id, statement);
   }
@@ -66,28 +59,25 @@ export class WorkerConnectionAdapter implements WorkerDriver {
     return { columns: await statement.getColumns() };
   }
 
-  private _bind(command: SqliteBind): void {
-    const { id, parameters } = command;
-    const statement = this.requireStatement(id);
-    statement.bind(parameters);
-  }
-
-  private _step(command: SqliteStep): Promise<SqliteStepResult> {
-    const { id, n, requireTransaction } = command;
-    const statement = this.requireStatement(id);
-    return statement.step(n, { requireTransaction });
-  }
-
   private _run(command: SqliteRun): Promise<SqliteChanges> {
     const { id } = command;
     const statement = this.requireStatement(id);
-    return statement.run(command);
+    return statement.run(command.parameters, command.options);
   }
 
-  private _reset(command: SqliteReset): void {
+  private async _query(command: SqliteQuery): Promise<SqliteQueryResult> {
     const { id } = command;
     const statement = this.requireStatement(id);
-    statement.reset(command);
+    if (command.array) {
+      const results = await statement.allArray(
+        command.parameters,
+        command.options
+      );
+      return { rows: results };
+    } else {
+      const results = await statement.all(command.parameters, command.options);
+      return { rows: results };
+    }
   }
 
   private _finalize(command: SqliteFinalize): void {
@@ -101,34 +91,20 @@ export class WorkerConnectionAdapter implements WorkerDriver {
     switch (command.type) {
       case SqliteCommandType.prepare:
         return this._prepare(command);
-      case SqliteCommandType.bind:
-        return this._bind(command);
-      case SqliteCommandType.step:
-        return this._step(command);
+      case SqliteCommandType.query:
+        return this._query(command);
       case SqliteCommandType.run:
         return this._run(command);
-      case SqliteCommandType.reset:
-        return this._reset(command);
       case SqliteCommandType.finalize:
         return this._finalize(command);
       case SqliteCommandType.parse:
         return this._parse(command);
-      case SqliteCommandType.changes:
-        return this.connnection.getLastChanges();
       default:
-        throw new Error(`Unknown command: ${command.type}`);
+        throw new Error(`Unknown command: ${(command as SqliteCommand).type}`);
     }
   }
 
   async execute<const T extends SqliteCommand[]>(
-    commands: T
-  ): Promise<InferBatchResult<T>> {
-    const p = this.promise.then(() => this._execute(commands));
-    this.promise = p.then(() => {});
-    return p;
-  }
-
-  async _execute<const T extends SqliteCommand[]>(
     commands: T
   ): Promise<InferBatchResult<T>> {
     let results: SqliteCommandResponse[] = [];

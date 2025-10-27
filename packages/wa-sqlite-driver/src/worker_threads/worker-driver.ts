@@ -1,12 +1,13 @@
 import {
   PrepareOptions,
-  ResetOptions,
+  QueryOptions,
+  SqliteArrayRow,
+  SqliteChanges,
   SqliteDriverConnection,
   SqliteDriverStatement,
+  SqliteObjectRow,
   SqliteParameterBinding,
-  SqliteChanges,
-  SqliteStepResult,
-  StepOptions,
+  StreamQueryOptions,
   UpdateListener
 } from '@sqlite-js/driver';
 
@@ -19,7 +20,7 @@ import {
   SqliteCommand,
   SqliteCommandType,
   SqliteDriverError
-} from './async-commands.js';
+} from '@sqlite-js/driver/worker/protocol';
 
 export interface WorkerDriverConnectionOptions {
   path: string;
@@ -28,8 +29,14 @@ export interface WorkerDriverConnectionOptions {
   workerOptions?: WorkerOptions;
 }
 
+interface CommandQueueItem {
+  cmd: SqliteCommand;
+  resolve?: (r: any) => void;
+  reject?: (e: SqliteDriverError) => void;
+}
+
 /**
- * Driver connection using worker_threads.
+ * Driver connection using Web Workers.
  */
 export class WorkerDriverConnection implements SqliteDriverConnection {
   worker: Worker;
@@ -40,18 +47,21 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
   private nextId = 1;
   private options: WorkerDriverConnectionOptions;
 
-  buffer: CommandQueueItem[] = [];
+  private buffer: CommandQueueItem[] = [];
+  private inProgress = 0;
 
   constructor(worker: Worker, options: WorkerDriverConnectionOptions) {
     this.worker = worker;
     this.options = options;
+
     worker.addEventListener('error', (err) => {
       console.error('worker error', err.message, err);
     });
+
     this.ready = new Promise<void>((resolve) => {
       worker.addEventListener('message', (event) => {
         const { id, value } = event.data;
-        if (id == 0) {
+        if (id === 0) {
           resolve();
           return;
         }
@@ -63,7 +73,6 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
         callback(value);
       });
     });
-    this.worker = worker;
   }
 
   open() {
@@ -76,41 +85,37 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
       cmd: {
         type: SqliteCommandType.prepare,
         id,
-        bigint: options?.bigint,
-        persist: options?.persist,
-        rawResults: options?.rawResults,
-        sql
+        sql,
+        autoFinalize: options?.autoFinalize
       }
     });
+    this._maybeFlush();
     return new WorkerDriverStatement(this, id);
   }
 
-  async getLastChanges(): Promise<SqliteChanges> {
-    return await this._push({
-      type: SqliteCommandType.changes
-    });
-  }
-
-  async sync(): Promise<void> {
-    await this._push({
-      type: SqliteCommandType.sync
-    });
+  async close() {
+    if (this.closing) {
+      return;
+    }
+    this.closing = true;
+    await this._flush();
+    const r: any = await this.post('close', {});
+    if (r?.error) {
+      throw r.error;
+    }
+    await this.worker.terminate();
   }
 
   _push<T extends SqliteCommand>(cmd: T): Promise<InferCommandResult<T>> {
-    const d = new Deferred<any>();
-    this.buffer.push({ cmd, resolve: d.resolve, reject: d.reject });
+    const deferred = new Deferred<any>();
+    this.buffer.push({ cmd, resolve: deferred.resolve, reject: deferred.reject });
     this._maybeFlush();
-    return d.promise as Promise<InferCommandResult<T>>;
+    return deferred.promise as Promise<InferCommandResult<T>>;
   }
 
   _send(cmd: SqliteCommand): void {
     this.buffer.push({ cmd });
     this._maybeFlush();
-  }
-
-  log(...args: any[]) {
-    console.log(this.options.path, this.options.connectionName, ...args);
   }
 
   private registerCallback(callback: (value: any) => void) {
@@ -136,55 +141,41 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
     return result;
   }
 
-  async close() {
-    if (this.closing) {
-      return;
-    }
-    this.closing = true;
-    await this._flush();
-    const r: any = await this.post('close', {});
-    if (r?.error) {
-      throw r.error;
-    }
-    await this.worker.terminate();
-  }
-
-  private inProgress = 0;
-
-  async _flush() {
+  private async _flush() {
     const commands = this.buffer;
-    if (commands.length == 0) {
+    if (commands.length === 0) {
       return;
     }
     this.buffer = [];
-    const r = await this._execute(commands.map((c) => c.cmd));
+    const responses = await this._execute(commands.map((c) => c.cmd));
     for (let i = 0; i < commands.length; i++) {
-      const c = commands[i];
-      const rr = r[i];
-      if (rr == null) {
-        c.reject?.({ message: 'no result received', code: '' });
-      } else if (isErrorResponse(rr)) {
-        c.reject?.(rr.error);
-      } else if (c.resolve) {
-        c.resolve!(rr.value);
+      const entry = commands[i];
+      const response = responses[i];
+      if (response == null) {
+        entry.reject?.({ message: 'no result received', code: '' });
+      } else if (isErrorResponse(response)) {
+        entry.reject?.(response.error);
+      } else if (entry.resolve) {
+        entry.resolve(response.value);
       }
     }
   }
 
-  async _maybeFlush() {
-    if (this.inProgress <= 2) {
-      this.inProgress += 1;
-      try {
-        while (this.buffer.length > 0) {
-          await this._flush();
-        }
-      } finally {
-        this.inProgress -= 1;
+  private async _maybeFlush() {
+    if (this.inProgress > 2) {
+      return;
+    }
+    this.inProgress += 1;
+    try {
+      while (this.buffer.length > 0) {
+        await this._flush();
       }
+    } finally {
+      this.inProgress -= 1;
     }
   }
 
-  async _execute<const T extends SqliteCommand[]>(
+  private async _execute<const T extends SqliteCommand[]>(
     commands: T
   ): Promise<InferBatchResult<T>> {
     return await this.post('execute', commands);
@@ -192,9 +183,7 @@ export class WorkerDriverConnection implements SqliteDriverConnection {
 
   onUpdate(
     listener: UpdateListener,
-    options?:
-      | { tables?: string[] | undefined; batchLimit?: number | undefined }
-      | undefined
+    options?: { tables?: string[] | undefined; batchLimit?: number | undefined }
   ): () => void {
     throw new Error('Not implemented');
   }
@@ -207,9 +196,52 @@ class WorkerDriverStatement implements SqliteDriverStatement {
     private driver: WorkerDriverConnection,
     private id: number
   ) {
-    if (typeof Symbol.dispose != 'undefined') {
+    if (typeof Symbol.dispose !== 'undefined') {
       this[Symbol.dispose] = () => this.finalize();
     }
+  }
+
+  async all(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteObjectRow[]> {
+    return this.driver
+      ._push({
+        type: SqliteCommandType.query,
+        id: this.id,
+        parameters,
+        options
+      })
+      .then((result) => result.rows as SqliteObjectRow[]);
+  }
+
+  async allArray(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteArrayRow[]> {
+    return this.driver
+      ._push({
+        type: SqliteCommandType.query,
+        id: this.id,
+        parameters,
+        options,
+        array: true
+      })
+      .then((result) => result.rows as SqliteArrayRow[]);
+  }
+
+  stream(
+    _parameters?: SqliteParameterBinding,
+    _options?: StreamQueryOptions
+  ): AsyncIterableIterator<SqliteObjectRow[]> {
+    throw new Error('Method not implemented.');
+  }
+
+  streamArray(
+    _parameters?: SqliteParameterBinding,
+    _options?: StreamQueryOptions
+  ): AsyncIterableIterator<SqliteArrayRow[]> {
+    throw new Error('Method not implemented.');
   }
 
   async getColumns(): Promise<string[]> {
@@ -218,31 +250,18 @@ class WorkerDriverStatement implements SqliteDriverStatement {
         type: SqliteCommandType.parse,
         id: this.id
       })
-      .then((r) => r.columns);
+      .then((result) => result.columns);
   }
 
-  bind(parameters: SqliteParameterBinding): void {
-    this.driver._send({
-      type: SqliteCommandType.bind,
-      id: this.id,
-      parameters: parameters
-    });
-  }
-
-  async step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
-    return this.driver._push({
-      type: SqliteCommandType.step,
-      id: this.id,
-      n: n,
-      requireTransaction: options?.requireTransaction
-    });
-  }
-
-  async run(options?: StepOptions): Promise<SqliteChanges> {
+  async run(
+    parameters?: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteChanges> {
     return this.driver._push({
       type: SqliteCommandType.run,
       id: this.id,
-      requireTransaction: options?.requireTransaction
+      parameters,
+      options
     });
   }
 
@@ -252,18 +271,4 @@ class WorkerDriverStatement implements SqliteDriverStatement {
       id: this.id
     });
   }
-
-  reset(options?: ResetOptions): void {
-    this.driver._send({
-      type: SqliteCommandType.reset,
-      id: this.id,
-      clearBindings: options?.clearBindings
-    });
-  }
-}
-
-interface CommandQueueItem {
-  cmd: SqliteCommand;
-  resolve?: (r: any) => void;
-  reject?: (e: SqliteDriverError) => void;
 }

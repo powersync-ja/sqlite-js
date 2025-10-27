@@ -8,8 +8,12 @@
     "test": "pnpm build && vitest",
     "clean": "tsc -b --clean && tsc -b ./test/tsconfig.json --clean && rm -rf lib test/lib"
   },
+  "types": "./lib/index.d.ts",
   "exports": {
-    ".": "./lib/index.js"
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    }
   },
   "keywords": [],
   "author": "",
