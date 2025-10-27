@@ -22,6 +22,7 @@ export interface DriverFactory {
 export interface QueuedPoolItem {
   resolve: (reserved: ReservedConnection) => void;
   reject: (err: any) => void;
+  options: ReserveConnectionOptions;
 }
 
 export class ReservedConnectionImpl implements ReservedConnection {

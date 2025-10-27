@@ -26,7 +26,7 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
     await this.connection.close();
   }
 
-  reserveConnection(
+  async reserveConnection(
     options?: ReserveConnectionOptions
   ): Promise<ReservedConnection> {
     if (options?.signal?.aborted) {
@@ -45,7 +45,7 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
 
     if (this.inUse == null) {
       this.inUse = reserved;
-      return Promise.resolve(reserved);
+      return reserved;
     } else {
       const promise = new Promise<ReservedConnection>((resolve, reject) => {
         const item: QueuedItem = {
@@ -64,7 +64,7 @@ export class SingleConnectionPool implements SqliteDriverConnectionPool {
         );
       });
 
-      return promise.then((r) => {
+      return promise.then(async (r) => {
         this.inUse = reserved;
         return r;
       });

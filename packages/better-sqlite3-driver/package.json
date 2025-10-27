@@ -8,8 +8,12 @@
     "test": "pnpm build && vitest",
     "clean": "tsc -b --clean && tsc -b ./test/tsconfig.json --clean && rm -rf lib test/lib"
   },
+  "types": "./lib/index.d.ts",
   "exports": {
-    ".": "./lib/index.js"
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    }
   },
   "keywords": [],
   "author": "",
@@ -19,8 +23,8 @@
     "@sqlite-js/driver": "workspace:^"
   },
   "devDependencies": {
-    "@types/node": "^22.3.0",
-    "typescript": "^5.5.4",
+    "@types/node": "^24.9.1",
+    "typescript": "^5.9.3",
     "vitest": "^2.0.5",
     "@sqlite-js/driver-tests": "workspace:^"
   }

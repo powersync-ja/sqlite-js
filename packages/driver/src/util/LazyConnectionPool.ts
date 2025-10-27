@@ -33,8 +33,12 @@ export class LazyConnectionPool implements SqliteDriverConnectionPool {
   }
 
   async close(): Promise<void> {
+    try {
     await this.initPromise;
     await this.connection!.close();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   onUpdate(

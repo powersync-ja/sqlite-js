@@ -8,19 +8,43 @@
     "build": "tsc -b",
     "clean": "tsc -b --clean && rm -rf lib"
   },
+  "types": "./lib/index.d.ts",
   "exports": {
-    ".": "./lib/index.js",
-    "./worker_threads": "./lib/worker_threads/index.js",
-    "./worker_threads/setup": "./lib/worker_threads/setup.js",
-    "./util": "./lib/util/index.js",
-    "./node": "./lib/node/index.js"
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./worker": {
+      "types": "./lib/worker/index.d.ts",
+      "default": "./lib/worker/index.js"
+    },
+    "./worker/*": {
+      "types": "./lib/worker/*.d.ts",
+      "default": "./lib/worker/*.js"
+    },
+    "./worker_threads": {
+      "types": "./lib/worker_threads/index.d.ts",
+      "default": "./lib/worker_threads/index.js"
+    },
+    "./worker_threads/setup": {
+      "types": "./lib/worker_threads/setup.d.ts",
+      "default": "./lib/worker_threads/setup.js"
+    },
+    "./util": {
+      "types": "./lib/util/index.d.ts",
+      "default": "./lib/util/index.js"
+    },
+    "./node": {
+      "types": "./lib/node/index.d.ts",
+      "default": "./lib/node/index.js"
+    }
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "dependencies": {},
   "devDependencies": {
-    "@types/node": "^22.3.0",
-    "typescript": "^5.5.4"
+    "@types/node": "^24.9.1",
+    "typescript": "^5.9.3"
   }
 }

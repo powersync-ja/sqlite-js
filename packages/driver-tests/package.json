@@ -22,7 +22,7 @@
     "@sqlite-js/driver": "workspace:^"
   },
   "devDependencies": {
-    "@types/node": "^22.3.0",
-    "typescript": "^5.5.4"
+    "@types/node": "^24.9.1",
+    "typescript": "^5.9.3"
   }
 }

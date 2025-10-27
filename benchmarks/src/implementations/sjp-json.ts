@@ -1,15 +1,14 @@
 import { promises as fs } from 'fs';
 import assert from 'node:assert';
 import { join } from 'path';
-import Prando from 'prando';
 import { SqliteConnectionPool } from '@sqlite-js/api';
 import { Benchmark } from '../Benchmark.js';
-import { numberName } from '../util.js';
+import { numberName, createRandom } from '../util.js';
 
 export class JSPJsonImpl extends Benchmark {
   private db!: SqliteConnectionPool;
   private dir: string;
-  private random = new Prando.default(0);
+  private random = createRandom(0);
 
   constructor(
     public name: string,

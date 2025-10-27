@@ -11,14 +11,14 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.9",
     "@types/mocha": "^10.0.6",
-    "@types/node": "^20.14.2",
+    "@types/node": "^24.9.1",
     "expect": "^29.7.0",
     "mocha": "^10.4.0",
     "prettier": "^3.2.5",
     "ts-node": "^10.9.2",
     "tsx": "^4.16.2",
-    "typescript": "^5.4.5",
-    "vitest": "^1.5.0"
+    "typescript": "^5.9.3",
+    "vitest": "^2.0.5"
   },
   "packageManager": "pnpm@9.6.0+sha512.38dc6fba8dba35b39340b9700112c2fe1e12f10b17134715a4aa98ccf7bb035e76fd981cf0bb384dfa98f8d6af5481c2bef2f4266a24bfa20c34eb7147ce0b5e"
 }

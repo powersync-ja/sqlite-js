@@ -3,14 +3,13 @@ import DatabaseConstructor from 'better-sqlite3';
 import { promises as fs } from 'fs';
 import assert from 'node:assert';
 import { join } from 'path';
-import Prando from 'prando';
 import { Benchmark } from '../Benchmark.js';
-import { numberName } from '../util.js';
+import { numberName, createRandom } from '../util.js';
 
 export class BetterSqlite3Impl extends Benchmark {
   private db!: bsqlite.Database;
   private dir: string;
-  private random = new Prando.default(0);
+  private random = createRandom(0);
 
   constructor(
     public name: string,
