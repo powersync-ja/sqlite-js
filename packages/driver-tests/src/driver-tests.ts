@@ -1,7 +1,4 @@
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import { beforeEach, describe, test } from './test.js';
-import { expect } from 'expect';
+import { beforeEach, describe, test, expect } from './test.js';
 import { SqliteDriverConnectionPool } from '@sqlite-js/driver';
 
 export interface DriverFeatures {
@@ -13,20 +10,13 @@ export interface DriverFeatures {
 export function describeDriverTests(
   name: string,
   features: DriverFeatures,
-  factory: (path: string) => SqliteDriverConnectionPool
+  factory: (path: string) => Promise<SqliteDriverConnectionPool>
 ) {
   describe(`${name} - driver tests`, () => {
     let dbPath: string;
 
     const open = async () => {
-      const dir = path.dirname(dbPath);
-      try {
-        await fs.mkdir(dir);
-      } catch (e) {}
-      try {
-        await fs.rm(dbPath);
-      } catch (e) {}
-      const db = factory(dbPath);
+      const db = await factory(dbPath);
       return db;
     };
 
