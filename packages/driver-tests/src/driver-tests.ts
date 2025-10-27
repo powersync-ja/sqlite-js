@@ -38,13 +38,11 @@ export function describeDriverTests(
       dbPath = `test-db/${testNameSanitized}.db`;
     });
 
-    test.skipIf(!features.rawResults)('basic select - raw', async () => {
+    test.skipIf(!features.rawResults)('basic select - array', async () => {
       await using driver = await open();
       await using connection = await driver.reserveConnection();
-      using s = connection.prepare('select 1 as one', {
-        rawResults: true
-      });
-      const { rows } = await s.step();
+      using s = connection.prepare('select 1 as one');
+      const rows = await s.allArray();
 
       expect(rows).toEqual([[1]]);
 
@@ -58,7 +56,7 @@ export function describeDriverTests(
       await using driver = await open();
       await using connection = await driver.reserveConnection();
       using s = connection.prepare('select 1 as one');
-      const { rows } = await s.step();
+      const rows = await s.all();
       expect(rows).toEqual([{ one: 1 }]);
     });
 
@@ -66,13 +64,12 @@ export function describeDriverTests(
       await using driver = await open();
       await using connection = await driver.reserveConnection();
       using s = connection.prepare('select 9223372036854775807 as bignumber');
-      const { rows } = await s.step();
+      const rows = await s.all();
 
       expect(rows).toEqual([{ bignumber: 9223372036854776000 }]);
 
       using s2 = connection.prepare('select ? as bignumber');
-      s2.bind([9223372036854775807n]);
-      const { rows: rows2 } = await s2.step();
+      const rows2 = await s2.all([9223372036854775807n]);
 
       expect(rows2).toEqual([{ bignumber: 9223372036854776000 }]);
     });
@@ -80,15 +77,15 @@ export function describeDriverTests(
     test('bigint', async () => {
       await using driver = await open();
       await using connection = await driver.reserveConnection();
-      using s = connection.prepare('select ? as bignumber', { bigint: true });
-      s.bind([9223372036854775807n]);
-      const { rows: rows1 } = await s.step();
+      using s = connection.prepare('select ? as bignumber');
+      const rows1 = await s.all([9223372036854775807n], { bigint: true });
       expect(rows1).toEqual([{ bignumber: 9223372036854775807n }]);
 
-      using s2 = connection.prepare('select 9223372036854775807 as bignumber', {
-        bigint: true
-      });
-      const { rows: rows2 } = await s2.step();
+      using s2 = connection.prepare(
+        'select 9223372036854775807 as bignumber',
+        {}
+      );
+      const rows2 = await s2.all(undefined, { bigint: true });
       expect(rows2).toEqual([{ bignumber: 9223372036854775807n }]);
     });
 
@@ -98,18 +95,13 @@ export function describeDriverTests(
       using s1 = connection.prepare(
         'create table test_data(id integer primary key, data text)'
       );
-      await s1.step();
+      await s1.run();
       using s2 = connection.prepare(
         'insert into test_data(data) values(123) returning id'
       );
-      const { rows } = await s2.step();
+      const rows = await s2.all();
 
       expect(rows).toEqual([{ id: 1 }]);
-
-      expect(await connection.connection.getLastChanges()).toEqual({
-        changes: 1,
-        lastInsertRowId: 1n
-      });
 
       if (features.getColumns) {
         const columns = await s2.getColumns();
@@ -121,8 +113,7 @@ export function describeDriverTests(
       await using driver = await open();
       await using connection = await driver.reserveConnection();
       using s = connection.prepare('select :one as one, :two as two');
-      s.bind({ one: 1, two: 2 });
-      const { rows } = await s.step();
+      const rows = await s.all({ one: 1, two: 2 });
       expect(rows).toEqual([{ one: 1, two: 2 }]);
     });
 
@@ -130,8 +121,7 @@ export function describeDriverTests(
       await using driver = await open();
       await using connection = await driver.reserveConnection();
       using s = connection.prepare('select $one as one, $two as two');
-      s.bind({ $one: 1, $two: 2 });
-      const { rows } = await s.step();
+      const rows = await s.all({ $one: 1, $two: 2 });
       expect(rows).toEqual([{ one: 1, two: 2 }]);
     });
 
@@ -141,39 +131,17 @@ export function describeDriverTests(
         await using driver = await open();
         await using connection = await driver.reserveConnection();
         using s = connection.prepare('select :one as one, :two as two');
-        s.bind({ two: 2 });
 
-        const { rows } = await s.step();
+        const rows = await s.all({ two: 2 });
         expect(rows).toEqual([{ one: null, two: 2 }]);
       }
     );
-
-    test('rebind arg', async () => {
-      await using driver = await open();
-      await using connection = await driver.reserveConnection();
-      using s = connection.prepare('select :one as one, :two as two');
-      s.bind({ one: 1, two: 2 });
-      s.bind({ one: 11, two: 22 });
-      const { rows } = await s.step();
-      expect(rows).toEqual([{ one: 11, two: 22 }]);
-    });
-
-    test('partial rebind', async () => {
-      await using driver = await open();
-      await using connection = await driver.reserveConnection();
-      using s = connection.prepare('select :one as one, :two as two');
-      s.bind({ one: 1, two: 2 });
-      s.bind({ two: 22 });
-      const { rows } = await s.step();
-      expect(rows).toEqual([{ one: 1, two: 22 }]);
-    });
 
     test('positional parameters', async () => {
       await using driver = await open();
       await using connection = await driver.reserveConnection();
       using s = connection.prepare('select ? as one, ? as two');
-      s.bind([1, 2]);
-      const { rows } = await s.step();
+      const rows = await s.all([1, 2]);
       expect(rows).toEqual([{ one: 1, two: 2 }]);
     });
 
@@ -181,96 +149,35 @@ export function describeDriverTests(
       await using driver = await open();
       await using connection = await driver.reserveConnection();
       using s = connection.prepare('select ?2 as two, ?1 as one');
-      s.bind({ '1': 1, '2': 2 });
-      const { rows } = await s.step();
+      const rows = await s.all({ '1': 1, '2': 2 });
       expect(rows).toEqual([{ two: 2, one: 1 }]);
     });
 
-    test('positional parameters partial rebind', async () => {
-      await using driver = await open();
-      await using connection = await driver.reserveConnection();
-      using s = connection.prepare('select ? as one, ? as two');
-      s.bind([1, 2]);
-      s.bind([undefined, 22]);
-      const { rows } = await s.step();
-      expect(rows).toEqual([{ one: 1, two: 22 }]);
-    });
-
-    test('named and positional parameters', async () => {
+    test.skip('named and positional parameters', async () => {
+      // TODO: Specify the behavior for this
       await using driver = await open();
       await using connection = await driver.reserveConnection();
       using s = connection.prepare(
         'select ? as one, @three as three, ? as two'
       );
-      s.bind([1, 2]);
-      s.bind({ three: 3 });
-      const { rows } = await s.step();
+      const rows = await s.all({ 1: 1, 2: 2, three: 3 });
       expect(rows).toEqual([{ one: 1, three: 3, two: 2 }]);
     });
 
-    test('reset parameters', async () => {
-      await using driver = await open();
-      await using connection = await driver.reserveConnection();
-      using s = connection.prepare('select ? as one, ? as two');
-      s.bind([1, 2]);
-      const { rows: rows1 } = await s.step();
-      s.reset();
-      const { rows: rows2 } = await s.step();
-      s.reset({ clearBindings: true });
+    test.skipIf(!features.allowsMissingParameters)(
+      'reset parameters',
+      async () => {
+        await using driver = await open();
+        await using connection = await driver.reserveConnection();
+        using s = connection.prepare('select ? as one, ? as two');
+        const rows1 = await s.all([1, 2]);
 
-      expect(rows1).toEqual([{ one: 1, two: 2 }]);
-      expect(rows2).toEqual([{ one: 1, two: 2 }]);
+        expect(rows1).toEqual([{ one: 1, two: 2 }]);
 
-      if (features.allowsMissingParameters) {
-        const { rows: rows3 } = await s.step();
-        expect(rows3).toEqual([{ one: null, two: null }]);
+        const rows2 = await s.all();
+        expect(rows2).toEqual([{ one: null, two: null }]);
       }
-    });
-
-    test('partial reset', async () => {
-      await using driver = await open();
-      await using connection = await driver.reserveConnection();
-      using s = connection.prepare(
-        "select json_each.value as v from json_each('[1,2,3,4,5]')"
-      );
-      const { rows: rows1 } = await s.step(3);
-      s.reset();
-      const { rows: rows2 } = await s.step(3);
-      const { rows: rows3 } = await s.step(3);
-      const { rows: rows4 } = await s.step(3);
-      s.reset();
-      const { rows: rows5 } = await s.step();
-
-      expect(rows1).toEqual([{ v: 1 }, { v: 2 }, { v: 3 }]);
-      expect(rows2).toEqual([{ v: 1 }, { v: 2 }, { v: 3 }]);
-      expect(rows3).toEqual([{ v: 4 }, { v: 5 }]);
-      expect(rows4).toBe(undefined);
-      expect(rows5).toEqual([{ v: 1 }, { v: 2 }, { v: 3 }, { v: 4 }, { v: 5 }]);
-    });
-
-    test('multiple insert step', async () => {
-      await using driver = await open();
-      await using connection = await driver.reserveConnection();
-
-      using s1 = connection.prepare(
-        'create table test_data(id integer primary key, data text)'
-      );
-      await s1.step();
-      using s2 = connection.prepare(
-        "insert into test_data(data) values('test')"
-      );
-      const { rows: rows1 } = await s2.step();
-      const { rows: rows2 } = await s2.step();
-      s2.reset();
-      const { rows: rows3 } = await s2.step();
-      using s3 = connection.prepare('select count(*) as count from test_data');
-      const { rows: rows4 } = await s3.step();
-
-      expect(rows1).toEqual([]);
-      expect(rows2).toBe(undefined);
-      expect(rows3).toEqual([]);
-      expect(rows4).toEqual([{ count: 2 }]);
-    });
+    );
 
     test('error handling - prepare', async () => {
       await using driver = await open();
@@ -280,13 +187,13 @@ export function describeDriverTests(
         code: 'SQLITE_ERROR',
         message: 'no such column: foobar'
       });
-      expect(await s.step().catch((e) => e)).toMatchObject({
+      expect(await s.all().catch((e) => e)).toMatchObject({
         code: 'SQLITE_ERROR',
         message: 'no such column: foobar'
       });
     });
 
-    test('error handling - step', async () => {
+    test('error handling - query', async () => {
       await using driver = await open();
       await using connection = await driver.reserveConnection();
       using s = connection.prepare(
@@ -295,7 +202,7 @@ export function describeDriverTests(
       if (features.getColumns) {
         expect(await s.getColumns()).toEqual(['value']);
       }
-      expect(await s.step().catch((e) => e)).toMatchObject({
+      expect(await s.all().catch((e) => e)).toMatchObject({
         code: 'SQLITE_ERROR',
         message: 'malformed JSON'
       });

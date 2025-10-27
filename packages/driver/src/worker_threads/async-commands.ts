@@ -1,20 +1,19 @@
 import {
   SqliteParameterBinding,
   SqliteChanges,
-  SqliteStepResult
+  QueryOptions,
+  StreamQueryOptions,
+  SqliteArrayRow,
+  SqliteObjectRow
 } from '../driver-api.js';
 import { SerializedDriverError } from '../sqlite-error.js';
 
-export enum SqliteCommandType {
+export const enum SqliteCommandType {
   prepare = 1,
-  bind = 2,
-  step = 3,
-  reset = 4,
   finalize = 5,
-  sync = 6,
   parse = 7,
   run = 8,
-  changes = 9
+  query = 9
 }
 
 export type SqliteDriverError = SerializedDriverError;
@@ -37,19 +36,11 @@ export interface SqlitePrepare extends SqliteBaseCommand {
   type: SqliteCommandType.prepare;
   id: number;
   sql: string;
-  bigint?: boolean;
-  persist?: boolean;
-  rawResults?: boolean;
+  autoFinalize?: boolean;
 }
 
 export interface SqliteParseResult {
   columns: string[];
-}
-
-export interface SqliteBind extends SqliteBaseCommand {
-  type: SqliteCommandType.bind;
-  id: number;
-  parameters: SqliteParameterBinding;
 }
 
 export interface SqliteParse extends SqliteBaseCommand {
@@ -57,23 +48,23 @@ export interface SqliteParse extends SqliteBaseCommand {
   id: number;
 }
 
-export interface SqliteStep extends SqliteBaseCommand {
-  type: SqliteCommandType.step;
-  id: number;
-  n?: number;
-  requireTransaction?: boolean;
-}
-
 export interface SqliteRun extends SqliteBaseCommand {
   type: SqliteCommandType.run;
   id: number;
-  requireTransaction?: boolean;
+  parameters?: SqliteParameterBinding;
+  options?: QueryOptions;
 }
 
-export interface SqliteReset extends SqliteBaseCommand {
-  type: SqliteCommandType.reset;
+export interface SqliteQueryResult {
+  rows: SqliteArrayRow[] | SqliteObjectRow[];
+}
+
+export interface SqliteQuery extends SqliteBaseCommand {
+  type: SqliteCommandType.query;
   id: number;
-  clearBindings?: boolean;
+  parameters?: SqliteParameterBinding;
+  options?: StreamQueryOptions;
+  array?: boolean;
 }
 
 export interface SqliteFinalize extends SqliteBaseCommand {
@@ -81,34 +72,20 @@ export interface SqliteFinalize extends SqliteBaseCommand {
   id: number;
 }
 
-export interface SqliteSync {
-  type: SqliteCommandType.sync;
-}
-
-export interface SqliteGetChanges {
-  type: SqliteCommandType.changes;
-}
-
 export type SqliteCommand =
   | SqlitePrepare
-  | SqliteBind
-  | SqliteStep
   | SqliteRun
-  | SqliteReset
   | SqliteFinalize
-  | SqliteSync
-  | SqliteParse
-  | SqliteGetChanges;
+  | SqliteQuery
+  | SqliteParse;
 
 export type InferCommandResult<T extends SqliteCommand> = T extends SqliteRun
   ? SqliteChanges
-  : T extends SqliteStep
-    ? SqliteStepResult
+  : T extends SqliteQuery
+    ? SqliteQueryResult
     : T extends SqliteParse
       ? SqliteParseResult
-      : T extends SqliteGetChanges
-        ? SqliteChanges
-        : void;
+      : void;
 
 export type InferBatchResult<T extends SqliteCommand[]> = {
   [i in keyof T]:

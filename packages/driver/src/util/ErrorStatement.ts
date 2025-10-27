@@ -1,11 +1,12 @@
 import {
   PrepareOptions,
-  ResetOptions,
+  QueryOptions,
+  SqliteArrayRow,
   SqliteChanges,
   SqliteDriverStatement,
+  SqliteObjectRow,
   SqliteParameterBinding,
-  SqliteStepResult,
-  StepOptions
+  StreamQueryOptions
 } from '../driver-api.js';
 import { SqliteDriverError } from '../worker_threads/async-commands.js';
 
@@ -27,28 +28,45 @@ export class ErrorStatement implements SqliteDriverStatement {
   ) {
     this.error = error;
     this.source = source;
-    this.persisted = options.persist ?? false;
+    this.persisted = options.autoFinalize ?? false;
+  }
+
+  async all(
+    parameters: SqliteParameterBinding,
+    options: QueryOptions
+  ): Promise<SqliteObjectRow[]> {
+    throw this.error;
+  }
+  async allArray(
+    parameters: SqliteParameterBinding,
+    options: QueryOptions
+  ): Promise<SqliteArrayRow[]> {
+    throw this.error;
+  }
+  async *stream(
+    parameters: SqliteParameterBinding,
+    options: StreamQueryOptions
+  ): AsyncIterableIterator<SqliteObjectRow[]> {
+    throw this.error;
+  }
+  async *streamArray(
+    parameters: SqliteParameterBinding,
+    options: StreamQueryOptions
+  ): AsyncIterableIterator<SqliteArrayRow[]> {
+    throw this.error;
   }
 
   async getColumns(): Promise<string[]> {
     throw this.error;
   }
-  bind(parameters: SqliteParameterBinding): void {
-    // no-op
-  }
-  async step(n?: number, options?: StepOptions): Promise<SqliteStepResult> {
-    throw this.error;
-  }
-
-  async run(options?: StepOptions): Promise<SqliteChanges> {
+  async run(
+    parameters: SqliteParameterBinding,
+    options?: QueryOptions
+  ): Promise<SqliteChanges> {
     throw this.error;
   }
 
   finalize(): void {
-    // no-op
-  }
-
-  reset(options?: ResetOptions): void {
     // no-op
   }
 
