@@ -1,6 +1,8 @@
 node_modules/
 test-db/
 *.db
+*.db-wal
+*.db-shm
 lib/
 tsconfig.tsbuildinfo
 benchmarks/db
